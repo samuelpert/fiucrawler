@@ -1,2 +1,30 @@
-.venv/
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# macOS system files
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Local development settings
+.idea/
+.vscode/
+*.swp
+*.swo
+

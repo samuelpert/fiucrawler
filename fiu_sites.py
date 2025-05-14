@@ -51,5 +51,12 @@ FIU_SITES = {
             "https://news.fiu.edu/_assets/news-sitemap.xml",
             "https://news.fiu.edu/insights/_assets/sitemap.xml"
         ]
+    },
+    "dem": {
+        "name": "Department of Emergency Management",
+        "base_url": "https://dem.fiu.edu/",
+        "sitemap_urls": [
+            "https://dem.fiu.edu/_assets/sitemap.xml"
+        ]
     }
 }

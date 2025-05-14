@@ -58,5 +58,14 @@ FIU_SITES = {
         "sitemap_urls": [
             "https://dem.fiu.edu/_assets/sitemap.xml"
         ]
+    },
+    "catalog": {
+        "name": "FIU Catalog",
+        "base_url": "https://catalog.fiu.edu",
+    },
+    "scholarship": {
+        "name": "FIU Scholarships",
+        "base_url": "https://fiu.academicworks.com"
+        
     }
 }

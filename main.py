@@ -1,5 +1,7 @@
 # main.py
 import asyncio
+from urllib.parse import urlparse
+from crawl4ai import AsyncWebCrawler, BFSDeepCrawlStrategy, BrowserConfig, CacheMode, CrawlerRunConfig, DefaultMarkdownGenerator, LXMLWebScrapingStrategy, PruningContentFilter
 import httpx
 from pathlib import Path
 from datetime import datetime
@@ -69,8 +71,8 @@ async def parse_sitemap(sitemap_url):
             
             urls = []
             
-            # Only exclude these specific file types
-            exclude_extensions = ['.jpg', '.jpeg', '.png', '.mp4', '.js', '.webp', '.css', '.gif']
+            # Remove this line - we'll use the shared function instead
+            # exclude_extensions = ['.jpg', '.jpeg', '.png', '.mp4', '.js', '.webp', '.css', '.gif']
             
             # Try with namespace
             url_elements = root.findall('.//sm:url/sm:loc', namespaces)
@@ -91,23 +93,16 @@ async def parse_sitemap(sitemap_url):
                     urls.extend(sub_urls)
                 return urls
             
-            # Extract URLs
+            # Extract URLs - REPLACE THIS ENTIRE SECTION
             excluded_count = 0
             for url_elem in url_elements:
                 url = url_elem.text
                 
-                # Check if URL should be excluded
-                should_exclude = False
-                
-                # Check file extensions (case insensitive)
-                for ext in exclude_extensions:
-                    if url.lower().endswith(ext):
-                        should_exclude = True
-                        excluded_count += 1
-                        break
-                
-                if not should_exclude:
+                # Use the shared function instead of inline logic
+                if not should_exclude_url(url):
                     urls.append(url)
+                else:
+                    excluded_count += 1
             
             print(f"  Found {len(url_elements)} URLs → {len(urls)} accepted ({excluded_count} excluded)")
             return urls
@@ -148,7 +143,7 @@ async def crawl_with_sitemap(site_config, sitemap_url):
     
     # Markdown generator with content filtering
     content_filter = PruningContentFilter(
-        threshold=0.48,
+        threshold=0.3,
         threshold_type="fixed"
     )
     markdown_generator = DefaultMarkdownGenerator(content_filter=content_filter)
@@ -164,7 +159,7 @@ async def crawl_with_sitemap(site_config, sitemap_url):
     )
     
     # Crawl URLs in batches
-    batch_size = 5
+    batch_size = 100
     site_folder = site_config['name'].lower().replace(" ", "_")
     successful_crawls = 0
     failed_crawls = 0
@@ -307,243 +302,172 @@ async def check_for_sitemap(site_config):
     print(f"❌ No sitemap configured for {site_config['name']}")
     return None
 
-async def crawl_with_deep_crawl(site_config, max_depth=3, max_pages=100, threshold=0.48):
-    """Crawl using deep crawl strategy with configurable parameters and error page detection"""
-    print(f"\n🕷️ Crawling {site_config['name']} using deep crawl")
-    print(f"  Max depth: {max_depth}")
-    print(f"  Max pages: {max_pages}")
-    print(f"  Content threshold: {threshold}")
+def should_exclude_url(url, exclude_extensions=None, exclude_patterns=None):
+    """Check if URL should be excluded based on extensions and patterns"""
+    if exclude_extensions is None:
+        exclude_extensions = ['.jpg', '.jpeg', '.png', '.mp4', '.js', '.webp', '.css', '.gif']
+    if exclude_patterns is None:
+        exclude_patterns = ['/download/', '/print/', '#', 'javascript:', 'mailto:']
     
-    from crawl4ai import AsyncWebCrawler, BFSDeepCrawlStrategy
-    from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig, CacheMode
-    from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
-    from crawl4ai.content_filter_strategy import PruningContentFilter
+    url_lower = url.lower()
     
-    # Configure browser with better settings
-    browser_config = BrowserConfig(
-        headless=True,
-        verbose=False,
-        page_timeout=30000,  # 30 seconds
-        wait_until="networkidle"
-    )
+    # Check extensions
+    for ext in exclude_extensions:
+        if url_lower.endswith(ext):
+            return True
     
-    # Enhanced deep crawl strategy
-    deep_crawl_strategy = BFSDeepCrawlStrategy(
-        max_depth=max_depth,
-        max_pages=max_pages,
-        same_domain_only=True,
-        exclude_patterns=[
-            r".*\.(jpg|jpeg|png|gif|mp4|pdf|zip|exe|dmg)$",
-            r".*/download/.*",
-            r".*/print/.*",
-            r"#.*",
-            r"javascript:.*",
-            r"mailto:.*"
-        ],
-        wait_time=1.0,  # Wait between requests
-        respect_robots_txt=True
-    )
+    # Check patterns
+    for pattern in exclude_patterns:
+        if pattern in url_lower:
+            return True
     
-    # Markdown generator with configurable content filtering
-    content_filter = PruningContentFilter(
-        threshold=threshold,
-        threshold_type="fixed",
-        exclude_selectors=[
-            "nav", "footer", "header",
-            ".navigation", ".menu", 
-            ".ads", ".banner",
-            "#comments"
-        ],
-        min_word_threshold=100
-    )
-    markdown_generator = DefaultMarkdownGenerator(content_filter=content_filter)
+    return False
+
+
+async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: int = 400):
+    base = site_cfg["base_url"]
+    host = urlparse(base).netloc.lower()
+    site_folder = site_cfg['name'].lower().replace(" ", "_")
+    print(f"\n🕷️ Deep crawling {site_cfg['name']} @ {base} (max_depth={max_depth}, max_pages={max_pages})")
     
-    # Crawler configuration
-    crawl_config = CrawlerRunConfig(
-        deep_crawl_strategy=deep_crawl_strategy,
-        markdown_generator=markdown_generator,
+    browser_cfg = BrowserConfig()
+    bfs = BFSDeepCrawlStrategy(max_depth=max_depth, max_pages=max_pages)
+    md_gen = DefaultMarkdownGenerator(content_filter=PruningContentFilter(0.48, "fixed"))
+    cfg = CrawlerRunConfig(
+        deep_crawl_strategy=bfs,
+        markdown_generator=md_gen,
         cache_mode=CacheMode.BYPASS,
         exclude_external_links=True,
         check_robots_txt=True,
-        remove_overlay_elements=True,
-        process_iframes=False,
-        delay_after_load=1.5,
-        verbose=False,
-        screenshot=False
+        process_iframes=True,
+        remove_overlay_elements=True
     )
     
     successful_crawls = 0
     failed_crawls = 0
-    error_pages = 0  # Track 404/error pages
-    site_folder = site_config['name'].lower().replace(" ", "_")
-    crawled_urls = set()
+    error_pages = 0
     
-    # Define patterns that indicate error pages
+    # Define error page patterns same as sitemap
     error_patterns = [
         "Page Not Found",
-        "ERROR 404",
+        "ERROR 404", 
         "error 404",
         "Error 404",
     ]
     
-    try:
-        async with AsyncWebCrawler(config=browser_config) as crawler:
-            results = await crawler.arun(
-                url=site_config['base_url'],
-                config=crawl_config
-            )
+    async with AsyncWebCrawler(config=browser_cfg) as cr:
+        # Stricter link filter that checks the exact host
+        cr.link_filter = lambda u: urlparse(u).netloc.lower() == host and not any(ext in u.lower() for ext in ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.css', '.js'])
+        results = await cr.arun(base, config=cfg)
+        
+        # Handle single result or list
+        if not isinstance(results, list):
+            results = [results]
+    
+    print(f"→ Found {len(results)} pages under {host}")
+    
+    for idx, res in enumerate(results, start=1):
+        u = res.url if hasattr(res, 'url') else base
+        
+        if res.success:
+            content = ""
+            if hasattr(res, "markdown"):
+                if isinstance(res.markdown, str):
+                    content = res.markdown
+                elif hasattr(res.markdown, "fit_markdown"):
+                    content = str(res.markdown.fit_markdown)
+                else:
+                    content = str(res.markdown)
             
-            # Handle single result or list
-            if not isinstance(results, list):
-                results = [results]
+            # Check for error page patterns
+            content_lower = content.lower()
+            is_error_page = False
             
-            print(f"\n📊 Found {len(results)} pages during deep crawl")
+            # Get metadata and title
+            metadata = getattr(res, "metadata", {})
+            title = metadata.get('title', '')
+            title_lower = title.lower()
             
-            # Process each result
-            for i, result in enumerate(results, 1):
-                try:
-                    # Skip duplicates
-                    if hasattr(result, 'url') and result.url in crawled_urls:
-                        continue
-                    
-                    if result.success:
-                        url = result.url if hasattr(result, 'url') else site_config['base_url']
-                        crawled_urls.add(url)
-                        
-                        # Extract markdown content
-                        markdown_content = ""
-                        if hasattr(result, 'markdown'):
-                            if hasattr(result.markdown, 'fit_markdown'):
-                                markdown_content = result.markdown.fit_markdown
-                            else:
-                                markdown_content = str(result.markdown)
-                        
-                        # Check for error page patterns
-                        content_lower = markdown_content.lower()
-                        is_error_page = False
-                        
-                        # Check title for error patterns
-                        title = ""
-                        if hasattr(result, 'metadata') and result.metadata.get('title'):
-                            title = result.metadata.get('title', '')
-                            title_lower = title.lower()
-                        else:
-                            title_lower = ""
-                        
-                        # Check both content and title for error patterns
-                        for pattern in error_patterns:
-                            if pattern in content_lower or pattern in title_lower:
-                                is_error_page = True
-                                break
-                        
-                        # Also check HTTP status if available
-                        if hasattr(result, 'status_code') and result.status_code == 404:
-                            is_error_page = True
-                        
-                        # Check for very short content (often error pages)
-                        if len(markdown_content.strip()) < 100:
-                            # If very short, check more carefully for error indicators
-                            if "404" in content_lower or "not found" in content_lower:
-                                is_error_page = True
-                        
-                        if is_error_page:
-                            error_pages += 1
-                            print(f"  ⚠️ Error page detected: {url[:50]}...")
-                            
-                            # Optionally save error page info for debugging
-                            error_metadata = {
-                                'title': 'Error Page - 404',
-                                'crawled_at': datetime.now().isoformat(),
-                                'error_type': '404_page',
-                                'original_title': title
-                            }
-                            
-                            save_markdown(
-                                content=f"Error page detected. URL may be broken.\n\n{markdown_content[:500]}...",
-                                metadata=error_metadata,
-                                site_name=site_folder + "_errors",
-                                url=url,
-                                index=i
-                            )
-                            continue
-                        
-                        # Skip if content too short (but not already caught as error)
-                        if len(markdown_content.strip()) < 200:
-                            print(f"  ⚠️ Skipping {url[:50]}... - insufficient content")
-                            continue
-                        
-                        # Enhanced metadata extraction
-                        metadata = {
-                            'crawled_at': datetime.now().isoformat(),
-                            'depth': result.metadata.get('depth', 0) if hasattr(result, 'metadata') else 0,
-                            'title': title if title else 'No title'
-                        }
-                        
-                        if hasattr(result, 'metadata'):
-                            metadata.update({
-                                'description': result.metadata.get('description', ''),
-                                'keywords': result.metadata.get('keywords', ''),
-                                'author': result.metadata.get('author', ''),
-                                'language': result.metadata.get('language', 'en')
-                            })
-                        
-                        # Save to markdown
-                        save_markdown(
-                            content=markdown_content,
-                            metadata=metadata,
-                            site_name=site_folder,
-                            url=url,
-                            index=i
-                        )
-                        successful_crawls += 1
-                        
-                        # Progress update
-                        if successful_crawls % 10 == 0:
-                            print(f"  ✅ Progress: {successful_crawls} pages saved")
-                    
-                    else:
-                        failed_crawls += 1
-                        error_msg = result.error if hasattr(result, 'error') else 'Unknown error'
-                        print(f"  ❌ Failed page {i}: {error_msg[:50]}...")
-                        
-                        # Save crawl error info
-                        if hasattr(result, 'url'):
-                            error_metadata = {
-                                'crawled_at': datetime.now().isoformat(),
-                                'error': str(error_msg),
-                                'title': 'Crawl Error'
-                            }
-                            save_markdown(
-                                content=f"Failed to crawl this page.\n\nError: {error_msg}",
-                                metadata=error_metadata,
-                                site_name=site_folder + "_errors",
-                                url=result.url,
-                                index=i
-                            )
+            # Check both content and title for error patterns
+            for pattern in error_patterns:
+                if pattern in content_lower or pattern in title_lower:
+                    is_error_page = True
+                    break
+            
+            # Also check HTTP status if available
+            if hasattr(res, 'status_code') and res.status_code == 404:
+                is_error_page = True
+            
+            if is_error_page:
+                error_pages += 1
+                print(f"  ⚠️ Error page detected: {u}")
                 
-                except Exception as e:
-                    failed_crawls += 1
-                    print(f"  ❌ Error processing result {i}: {str(e)}")
-                    continue
-                    
-    except Exception as e:
-        print(f"\n❌ Crawler error: {str(e)}")
-        import traceback
-        traceback.print_exc()
+                # Save error page info
+                error_metadata = {
+                    'title': 'Error Page - 404',
+                    'crawled_at': datetime.now().isoformat(),
+                    'error_type': '404_page'
+                }
+                
+                save_markdown(
+                    content=f"Error page detected. URL may be broken.\n\n{content[:500]}...",
+                    metadata=error_metadata,
+                    site_name=site_folder + "_errors",
+                    url=u,
+                    index=idx
+                )
+                continue
+            
+            # Skip if content is too short
+            if len(content.strip()) < 100:
+                print(f"  ⚠️ Skipping {u} - insufficient content")
+                failed_crawls += 1
+                continue
+            
+            # Enhanced metadata
+            enhanced_metadata = {
+                'title': title if title else 'No title',
+                'crawled_at': datetime.now().isoformat(),
+                'depth': metadata.get('depth', 0)
+            }
+            enhanced_metadata.update(metadata)
+            
+            save_markdown(content, enhanced_metadata, site_folder, u, index=idx)
+            successful_crawls += 1
+            print(f"✅ {u}")
+        else:
+            failed_crawls += 1
+            error_msg = getattr(res,'error','Unknown error')
+            print(f"❌ {u} failed: {error_msg}")
+            
+            # Save error file
+            error_metadata = {
+                'title': 'Crawl Error',
+                'crawled_at': datetime.now().isoformat(),
+                'error': str(error_msg)
+            }
+            
+            save_markdown(
+                content=f"Couldn't crawl due to error: {error_msg}",
+                metadata=error_metadata,
+                site_name=site_folder + "_errors",
+                url=u,
+                index=idx
+            )
     
     # Print summary
     print(f"\n📊 Deep Crawl Summary:")
     print(f"  ✅ Successful: {successful_crawls}")
     print(f"  ❌ Failed: {failed_crawls}")
     print(f"  ⚠️ Error pages (404): {error_pages}")
-    print(f"  📁 Total unique URLs: {len(crawled_urls)}")
+    print(f"  📁 Total files: {successful_crawls + failed_crawls + error_pages}")
     print(f"  💾 Content saved to: {Path('fiu_content') / site_folder}")
     
+    # RETURN THE STATISTICS!
     return successful_crawls, failed_crawls, error_pages
 
-
 # Update the crawl_site function to pass parameters
-async def crawl_site(site_key, max_depth=3, max_pages=100, threshold=0.48):
+async def crawl_site(site_key, max_depth: int = 2, max_pages: int = 400, threshold=0.48):
     """Main function to crawl a single site with parameters"""
     if site_key not in FIU_SITES:
         print(f"Unknown site: {site_key}")
@@ -562,15 +486,14 @@ async def crawl_site(site_key, max_depth=3, max_pages=100, threshold=0.48):
         # Use sitemap approach
         await crawl_with_sitemap(site_config, sitemap_url)
     else:
-        # Use deep crawl approach with parameters
-        await crawl_with_deep_crawl(site_config, max_depth, max_pages, threshold)
+        # Use deep crawl approach
+        await crawl_with_deep_crawl(site_config, max_depth=max_depth, max_pages=max_pages)  # Pass parameters
     
     # Print summary
     site_dir = Path("fiu_content") / site_config['name'].lower().replace(" ", "_")
     if site_dir.exists():
         md_files = list(site_dir.glob("*.md"))
         print(f"\n✅ Crawl complete. Saved {len(md_files)} files to {site_dir}")
-
 
 # Update main function to test with parameters
 async def main():
@@ -580,7 +503,7 @@ async def main():
     
     # Test with custom parameters
     await crawl_site("commencement")
-    
+
 
 
 if __name__ == "__main__":

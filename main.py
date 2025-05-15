@@ -1,7 +1,7 @@
 # main.py
 import asyncio
 from urllib.parse import urlparse
-from crawl4ai import AsyncWebCrawler, BFSDeepCrawlStrategy, BrowserConfig, CacheMode, CrawlerRunConfig, DefaultMarkdownGenerator, LXMLWebScrapingStrategy, PruningContentFilter
+from crawl4ai import AsyncWebCrawler, BFSDeepCrawlStrategy, BrowserConfig, CacheMode, CrawlerRunConfig, DefaultMarkdownGenerator, DomainFilter, FilterChain, LXMLWebScrapingStrategy, PruningContentFilter
 import httpx
 from pathlib import Path
 from datetime import datetime
@@ -329,9 +329,14 @@ async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: i
     host = urlparse(base).netloc.lower()
     site_folder = site_cfg['name'].lower().replace(" ", "_")
     print(f"\n🕷️ Deep crawling {site_cfg['name']} @ {base} (max_depth={max_depth}, max_pages={max_pages})")
+
+
+    filter_chain = FilterChain([
+        DomainFilter(allowed_domains=["mymajor.fiu.edu"]),
+    ])
     
     browser_cfg = BrowserConfig()
-    bfs = BFSDeepCrawlStrategy(max_depth=max_depth, max_pages=max_pages)
+    bfs = BFSDeepCrawlStrategy(max_depth=max_depth, max_pages=max_pages, filter_chain=filter_chain)
     md_gen = DefaultMarkdownGenerator(content_filter=PruningContentFilter(0.48, "fixed"))
     cfg = CrawlerRunConfig(
         deep_crawl_strategy=bfs,
@@ -502,7 +507,7 @@ async def main():
     Path("fiu_content").mkdir(exist_ok=True)
     
     # Test with custom parameters
-    await crawl_site("commencement")
+    await crawl_site("majors", max_depth=3, max_pages=400, threshold=0.48)
 
 
 

@@ -67,5 +67,9 @@ FIU_SITES = {
         "name": "FIU Scholarships",
         "base_url": "https://fiu.academicworks.com"
         
-    }
+    },
+    "majors": {
+        "name": "My Major",
+        "base_url": "https://mymajor.fiu.edu/"
+    },
 }

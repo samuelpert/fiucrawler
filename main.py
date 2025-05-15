@@ -9,6 +9,76 @@ from fiu_sites import FIU_SITES
 import xml.etree.ElementTree as ET
 
 
+async def extract_pdfs_from_site(site_config):
+    """Extract all PDF links from a website using deep crawl specifically for PDFs"""
+    base_url = site_config['base_url']
+    domain = urlparse(base_url).netloc
+    print(f"\n📄 Extracting PDFs from {site_config['name']} ({base_url})")
+    
+    # Define domain filter for the specific site
+    filter_chain = FilterChain([
+        DomainFilter(allowed_domains=[domain]),
+    ])
+
+    browser_config = BrowserConfig(
+        headless=True,
+        browser_type="chrome",
+        verbose=False
+    )
+
+    # Configure deeper crawl specifically for PDFs
+    config = CrawlerRunConfig(
+        deep_crawl_strategy=BFSDeepCrawlStrategy(
+            max_depth=3,  # Go deeper for PDFs
+            max_pages=1000,  # More pages to find all PDFs
+            filter_chain=filter_chain
+        ),
+        verbose=True,
+    )
+
+    # Process results after crawling
+    pdf_urls = set()  # Use a set to avoid duplicates
+    
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        # Custom link filter to help find PDFs
+        def enhanced_pdf_link_filter(url):
+            # Keep URLs from same domain and specifically look for PDF-related patterns
+            url_lower = url.lower()
+            url_domain = urlparse(url).netloc
+            is_same_domain = (url_domain == domain or not url_domain)
+            
+            # Always accept PDFs
+            if url_lower.endswith('.pdf'):
+                return True
+                
+            # Accept URLs that might lead to PDFs
+            pdf_patterns = ['/pdf/', '/pdfs/', '/documents/', '/downloads/', '/files/']
+            might_lead_to_pdf = any(pattern in url_lower for pattern in pdf_patterns)
+            
+            return is_same_domain and (might_lead_to_pdf or '/download' in url_lower)
+            
+        crawler.link_filter = enhanced_pdf_link_filter
+        
+        try:
+            results = await crawler.arun(base_url, config=config)
+            
+            # Handle both single result and list
+            if not isinstance(results, list):
+                results = [results]
+            
+            # Post-process to filter PDFs
+            for result in results:
+                if hasattr(result, 'url') and result.url.lower().endswith('.pdf'):
+                    pdf_urls.add(result.url)
+                    print(f"  🔍 Found PDF: {result.url}")
+        except Exception as e:
+            print(f"  ❌ Error during PDF extraction: {str(e)}")
+
+    print(f"  ✅ Found {len(pdf_urls)} unique PDF files")
+    return pdf_urls
+
+
+
 def create_markdown_filename(url, index=None):
     """Create a safe filename from URL"""
     # Remove protocol
@@ -112,13 +182,12 @@ async def parse_sitemap(sitemap_url):
             return []
 
 async def crawl_with_sitemap(site_config, sitemap_url):
-    """Crawl using sitemap.xml with 404 error detection"""
+    """Crawl using sitemap.xml with PDF extraction and 404 error detection"""
     print(f"\n🗺️ Crawling {site_config['name']} using sitemap")
     
-    from crawl4ai import AsyncWebCrawler
-    from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig, CacheMode
-    from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
-    from crawl4ai.content_filter_strategy import PruningContentFilter
+    # First extract all PDFs from the site using deep crawl
+    pdf_urls = await extract_pdfs_from_site(site_config)
+    print(f"📊 PDF Extraction: Found {len(pdf_urls)} unique PDF files")
     
     # Get URLs from sitemap(s)
     all_urls = []
@@ -138,32 +207,49 @@ async def crawl_with_sitemap(site_config, sitemap_url):
         print("❌ No URLs found in sitemap(s)")
         return
     
-    # Configure browser and crawler
-    browser_config = BrowserConfig()
+    # Create PDF index file
+    site_folder = site_config['name'].lower().replace(" ", "_")
+    if pdf_urls:
+        pdf_dir = Path("fiu_content") / site_folder
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+        pdf_index_path = pdf_dir / "pdf_index.md"
+        
+        with open(pdf_index_path, "w", encoding="utf-8") as f:
+            f.write(f"""---
+url: {site_config['base_url']}/pdf_index
+site: {site_config['name']}
+crawled_at: {datetime.now().isoformat()}
+title: PDF Index - {site_config['name']}
+---
+
+# PDF Resources for {site_config['name']}
+
+This document contains all PDF resources found on {site_config['base_url']}.
+
+## PDF Files ({len(pdf_urls)})
+
+""")
+            # Sort PDFs by filename for better organization
+            sorted_pdfs = sorted(pdf_urls, key=lambda x: x.split("/")[-1].lower())
+            for pdf_url in sorted_pdfs:
+                # Extract filename from URL for better display
+                filename = pdf_url.split("/")[-1]
+                # Create markdown link
+                f.write(f"- [{filename}]({pdf_url})\n")
+                
+        print(f"📄 Created PDF index with {len(pdf_urls)} files")
     
-    # Markdown generator with content filtering
-    content_filter = PruningContentFilter(
-        threshold=0.3,
-        threshold_type="fixed"
-    )
-    markdown_generator = DefaultMarkdownGenerator(content_filter=content_filter)
+    # Now continue with regular content crawling using sitemap URLs
+    # Configure browser and crawler
     
     # Crawler configuration
-    crawl_config = CrawlerRunConfig(
-        markdown_generator=markdown_generator,
-        cache_mode=CacheMode.BYPASS,
-        check_robots_txt=True,
-        exclude_external_links=True,
-        process_iframes=True,
-        remove_overlay_elements=True
-    )
+    
     
     # Crawl URLs in batches
     batch_size = 100
-    site_folder = site_config['name'].lower().replace(" ", "_")
     successful_crawls = 0
     failed_crawls = 0
-    error_pages = 0  # Track 404/error pages
+    error_pages = 0
     
     # Define patterns that indicate error pages
     error_patterns = [
@@ -172,19 +258,39 @@ async def crawl_with_sitemap(site_config, sitemap_url):
         "error 404",
         "Error 404",
     ]
-    
-    async with AsyncWebCrawler(config=browser_config) as crawler:
+
+
+    markdown_generator = DefaultMarkdownGenerator(
+    content_filter=PruningContentFilter(threshold=0.3, threshold_type="fixed")
+    )
+
+    my_run_config = CrawlerRunConfig(
+        markdown_generator=markdown_generator,
+        check_robots_txt=True,
+        verbose=True,
+        excluded_tags=["footer", "nav", "header"], # Remove entire tag blocks
+
+    )
+
+    async with AsyncWebCrawler() as crawler:
         for i in range(0, len(all_urls), batch_size):
             batch = all_urls[i:i+batch_size]
             print(f"\n📦 Processing batch {i//batch_size + 1}/{(len(all_urls) + batch_size - 1)//batch_size}")
             
             # Use arun_many for batch processing
-            results = await crawler.arun_many(urls=batch, config=crawl_config)
+            results = await crawler.arun_many(urls=batch, config=my_run_config)
             
             # Process results
             for j, result in enumerate(results):
+                if j >= len(batch):  # Safety check
+                    continue
+                    
                 url = batch[j]
                 index = i + j + 1
+                
+                # Skip PDFs in regular content crawling since we already processed them
+                if url.lower().endswith('.pdf'):
+                    continue
                 
                 if result.success:
                     # Get markdown content
@@ -206,7 +312,7 @@ async def crawl_with_sitemap(site_config, sitemap_url):
                     
                     # Check both content and title for error patterns
                     for pattern in error_patterns:
-                        if pattern in content_lower or pattern in title:
+                        if pattern.lower() in content_lower or pattern.lower() in title:
                             is_error_page = True
                             break
                     
@@ -234,11 +340,7 @@ async def crawl_with_sitemap(site_config, sitemap_url):
                         )
                         continue
                     
-                    # Skip if content is too short (might be error page)
-                    if len(markdown_content.strip()) < 100:
-                        print(f"  ⚠️ Skipping {url} - insufficient content")
-                        failed_crawls += 1
-                        continue
+                    # REMOVED: The insufficient content check that was here
                     
                     # Get metadata
                     metadata = {
@@ -257,7 +359,9 @@ async def crawl_with_sitemap(site_config, sitemap_url):
                         index=index
                     )
                     successful_crawls += 1
+                    print(f"  ✅ Saved: {url}")
                 else:
+                    # [rest of error handling remains the same]
                     # Save error file
                     error_content = f"Couldn't crawl due to error: {result.error if hasattr(result, 'error') else 'Unknown error'}"
                     error_metadata = {
@@ -281,10 +385,13 @@ async def crawl_with_sitemap(site_config, sitemap_url):
                 await asyncio.sleep(2)
     
     print(f"\n📊 Crawl Summary:")
-    print(f"  ✅ Successful: {successful_crawls}")
-    print(f"  ❌ Failed: {failed_crawls}")
+    print(f"  ✅ Successful pages: {successful_crawls}")
+    print(f"  ❌ Failed pages: {failed_crawls}")
     print(f"  ⚠️ Error pages (404): {error_pages}")
-    print(f"  📁 Total files: {successful_crawls + failed_crawls + error_pages}")
+    print(f"  📄 PDF files discovered: {len(pdf_urls)}")
+    print(f"  📁 Total files: {successful_crawls + failed_crawls + error_pages + (1 if pdf_urls else 0)}")
+    
+    return successful_crawls, failed_crawls, error_pages, len(pdf_urls)
 
 
 async def check_for_sitemap(site_config):
@@ -507,7 +614,7 @@ async def main():
     Path("fiu_content").mkdir(exist_ok=True)
     
     # Test with custom parameters
-    await crawl_site("majors", max_depth=3, max_pages=400, threshold=0.48)
+    await crawl_site("dem", max_depth=3, max_pages=400, threshold=0.48)
 
 
 

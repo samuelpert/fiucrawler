@@ -5,7 +5,7 @@ async def main():
     # Create an instance of AsyncWebCrawler
     async with AsyncWebCrawler() as crawler:
         # Run the crawler on a URL
-        result = await crawler.arun(url="https://crawl4ai.com")
+        result = await crawler.arun(url="https://dem.fiu.edu/resources/")
 
         # Print the extracted content
         print(result.markdown)

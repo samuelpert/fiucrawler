@@ -1,4 +1,4 @@
-# main.py
+import argparse
 import asyncio
 from urllib.parse import urlparse
 from crawl4ai import AsyncWebCrawler, BFSDeepCrawlStrategy, BrowserConfig, CacheMode, CrawlerRunConfig, DefaultMarkdownGenerator, DomainFilter, FilterChain, LXMLWebScrapingStrategy, PruningContentFilter
@@ -181,9 +181,10 @@ async def parse_sitemap(sitemap_url):
             print(f"❌ Error parsing sitemap {sitemap_url}: {e}")
             return []
 
-async def crawl_with_sitemap(site_config, sitemap_url):
+async def crawl_with_sitemap(site_config, sitemap_url, threshold=0.30):
     """Crawl using sitemap.xml with PDF extraction and 404 error detection"""
     print(f"\n🗺️ Crawling {site_config['name']} using sitemap")
+    print(f"  Parameters: threshold={threshold}")
     
     # First extract all PDFs from the site using deep crawl
     pdf_urls = await extract_pdfs_from_site(site_config)
@@ -261,7 +262,7 @@ This document contains all PDF resources found on {site_config['base_url']}.
 
 
     markdown_generator = DefaultMarkdownGenerator(
-    content_filter=PruningContentFilter(threshold=0.3, threshold_type="fixed")
+    content_filter=PruningContentFilter(threshold=threshold, threshold_type="fixed")
     )
 
     my_run_config = CrawlerRunConfig(
@@ -431,11 +432,13 @@ def should_exclude_url(url, exclude_extensions=None, exclude_patterns=None):
     return False
 
 
-async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: int = 400):
+async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: int = 400, threshold=0.30):
     base = site_cfg["base_url"]
     host = urlparse(base).netloc.lower()
     site_folder = site_cfg['name'].lower().replace(" ", "_")
-    print(f"\n🕷️ Deep crawling {site_cfg['name']} @ {base} (max_depth={max_depth}, max_pages={max_pages})")
+    print(f"\n🕷️ Deep crawling {site_cfg['name']} @ {base}")
+    print(f"  Parameters: max_depth={max_depth}, max_pages={max_pages}, threshold={threshold}")
+
 
 
     filter_chain = FilterChain([
@@ -444,7 +447,7 @@ async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: i
     
     browser_cfg = BrowserConfig()
     bfs = BFSDeepCrawlStrategy(max_depth=max_depth, max_pages=max_pages, filter_chain=filter_chain)
-    md_gen = DefaultMarkdownGenerator(content_filter=PruningContentFilter(0.48, "fixed"))
+    md_gen = DefaultMarkdownGenerator(content_filter=PruningContentFilter(threshold, "fixed"))
     cfg = CrawlerRunConfig(
         deep_crawl_strategy=bfs,
         markdown_generator=md_gen,
@@ -579,7 +582,7 @@ async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: i
     return successful_crawls, failed_crawls, error_pages
 
 # Update the crawl_site function to pass parameters
-async def crawl_site(site_key, max_depth: int = 2, max_pages: int = 400, threshold=0.48):
+async def crawl_site(site_key, max_depth: int = 2, max_pages: int = 400, threshold=0.30):
     """Main function to crawl a single site with parameters"""
     if site_key not in FIU_SITES:
         print(f"Unknown site: {site_key}")
@@ -589,6 +592,15 @@ async def crawl_site(site_key, max_depth: int = 2, max_pages: int = 400, thresho
     print(f"\n{'='*50}")
     print(f"Starting crawl for: {site_config['name']}")
     print(f"Base URL: {site_config['base_url']}")
+
+
+    # Different parameter display based on crawl type
+    if 'sitemap_urls' in site_config:
+        print(f"Crawl type: Sitemap-based")
+        print(f"Parameters: threshold={threshold}")
+    else:
+        print(f"Crawl type: Deep crawl")
+        print(f"Parameters: max_depth={max_depth}, max_pages={max_pages}, threshold={threshold}")
     print(f"{'='*50}")
     
     # Check for sitemap
@@ -596,10 +608,10 @@ async def crawl_site(site_key, max_depth: int = 2, max_pages: int = 400, thresho
     
     if sitemap_url:
         # Use sitemap approach
-        await crawl_with_sitemap(site_config, sitemap_url)
+        await crawl_with_sitemap(site_config, sitemap_url, threshold=threshold)
     else:
         # Use deep crawl approach
-        await crawl_with_deep_crawl(site_config, max_depth=max_depth, max_pages=max_pages)  # Pass parameters
+        await crawl_with_deep_crawl(site_config, max_depth=max_depth, max_pages=max_pages, threshold=threshold)  # Pass parameters
     
     # Print summary
     site_dir = Path("fiu_content") / site_config['name'].lower().replace(" ", "_")
@@ -609,12 +621,39 @@ async def crawl_site(site_key, max_depth: int = 2, max_pages: int = 400, thresho
 
 # Update main function to test with parameters
 async def main():
-    """Main entry point"""
+    """Main entry point with command line argument parsing"""
+    # Create an argument parser
+    parser = argparse.ArgumentParser(description='FIU Website Crawler')
+    
+    # Add arguments
+    parser.add_argument('site_key', help='Site key from fiu_sites.py (e.g., "onestop", "dem", "admissions")')
+    parser.add_argument('--max-depth', type=int, default=2, help='Maximum crawl depth for deep crawling (default: 2)')
+    parser.add_argument('--max-pages', type=int, default=400, help='Maximum number of pages to crawl (default: 400)')
+    parser.add_argument('--threshold', type=float, default=0.48, help='Content filtering threshold (default: 0.48)')
+    
+    # Parse arguments
+    args = parser.parse_args()
+    
+    # Validate site key
+    if args.site_key not in FIU_SITES:
+        print(f"Error: Unknown site key '{args.site_key}'. Available site keys are: {', '.join(FIU_SITES.keys())}")
+        return
+    
     # Create base directory
     Path("fiu_content").mkdir(exist_ok=True)
     
-    # Test with custom parameters
-    await crawl_site("dem", max_depth=3, max_pages=400, threshold=0.48)
+    # Run the crawler with provided parameters
+    print(f"Starting crawl for {args.site_key} with parameters:")
+    print(f"  max_depth: {args.max_depth}")
+    print(f"  max_pages: {args.max_pages}")
+    print(f"  threshold: {args.threshold}")
+    
+    await crawl_site(
+        args.site_key, 
+        max_depth=args.max_depth, 
+        max_pages=args.max_pages, 
+        threshold=args.threshold
+    )
 
 
 

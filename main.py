@@ -1,8 +1,14 @@
+ # Common patterns indicating error pages or invalid resources
+ERROR_PATTERNS = [
+    "Page Not Found", "ERROR 404", "error 404", "Error 404"
+]
 import argparse
 import asyncio
 from urllib.parse import urlparse
 from crawl4ai import AsyncWebCrawler, BFSDeepCrawlStrategy, BrowserConfig, CacheMode, CrawlerRunConfig, DefaultMarkdownGenerator, DomainFilter, FilterChain, LXMLWebScrapingStrategy, PruningContentFilter
 import httpx
+import io
+from PyPDF2 import PdfReader
 from pathlib import Path
 from datetime import datetime
 from fiu_sites import FIU_SITES
@@ -23,7 +29,7 @@ async def extract_pdfs_from_site(site_config):
     browser_config = BrowserConfig(
         headless=True,
         browser_type="chrome",
-        verbose=False
+        verbose=False,
     )
 
     # Configure deeper crawl specifically for PDFs
@@ -73,6 +79,15 @@ async def extract_pdfs_from_site(site_config):
                     print(f"  🔍 Found PDF: {result.url}")
         except Exception as e:
             print(f"  ❌ Error during PDF extraction: {str(e)}")
+
+    # Exclude PDF URLs matching common error patterns
+    filtered_pdfs = set()
+    for pdf_url in pdf_urls:
+        if not any(pat.lower() in pdf_url.lower() for pat in ERROR_PATTERNS):
+            filtered_pdfs.add(pdf_url)
+        else:
+            print(f"  🚫 Excluded PDF due to error pattern: {pdf_url}")
+    pdf_urls = filtered_pdfs
 
     print(f"  ✅ Found {len(pdf_urls)} unique PDF files")
     return pdf_urls
@@ -190,40 +205,41 @@ async def crawl_with_sitemap(site_config, sitemap_url, threshold=0.30):
     pdf_urls = await extract_pdfs_from_site(site_config)
     print(f"📊 PDF Extraction: Found {len(pdf_urls)} unique PDF files")
 
-    # Crawl and save each PDF as its own Markdown
-    print(f"📄 Crawling and saving each PDF ({len(pdf_urls)})")
-    pdf_md_gen = DefaultMarkdownGenerator()
-    pdf_run_cfg = CrawlerRunConfig(
-        markdown_generator=pdf_md_gen,
-        check_robots_txt=False,
-        verbose=True
-    )
-    browser_cfg = BrowserConfig(
-        headless=True,
-        browser_type="chrome",
-        verbose=False
-    )
+    # Manually download and extract each PDF using PyPDF2
     site_folder = site_config['name'].lower().replace(" ", "_")
-    async with AsyncWebCrawler(config=browser_cfg) as pdf_crawler:
-        for idx, pdf_url in enumerate(sorted(pdf_urls), start=1):
-            try:
-                pdf_result = await pdf_crawler.arun(url=pdf_url, config=pdf_run_cfg)
-                pdf_content = ""
-                if hasattr(pdf_result, 'markdown'):
-                    pdf_content = str(pdf_result.markdown)
-                metadata = {
-                    'title': pdf_result.metadata.get('title', 'PDF') if hasattr(pdf_result, 'metadata') else 'PDF',
-                    'crawled_at': datetime.now().isoformat()
-                }
-                save_markdown(
-                    content=pdf_content,
-                    metadata=metadata,
-                    site_name=site_folder,
-                    url=pdf_url,
-                    index=idx
-                )
-            except Exception as e:
-                print(f"  ❌ Error crawling PDF {pdf_url}: {e}")
+    print(f"📄 Crawling and saving each PDF ({len(pdf_urls)})")
+    for idx, pdf_url in enumerate(sorted(pdf_urls), start=1):
+        # Download the PDF
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(pdf_url)
+        if resp.status_code != 200:
+            print(f"  ❌ Failed to download PDF {pdf_url}: HTTP {resp.status_code}")
+            continue
+        # Parse PDF
+        try:
+            reader = PdfReader(io.BytesIO(resp.content))
+            pages = [p.extract_text() for p in reader.pages if p.extract_text()]
+            pdf_content = "\n\n".join(pages)
+            title = reader.metadata.title or ""
+        except Exception as e:
+            print(f"  ❌ Error parsing PDF {pdf_url}: {e}")
+            continue
+        # Filter error PDFs
+        if any(pat.lower() in pdf_content.lower() or pat.lower() in title.lower() for pat in ERROR_PATTERNS):
+            print(f"  🚫 Excluded PDF due to error pattern: {pdf_url}")
+            continue
+        # Save valid PDFs
+        metadata = {
+            'title': title if title else 'PDF',
+            'crawled_at': datetime.now().isoformat()
+        }
+        save_markdown(
+            content=pdf_content,
+            metadata=metadata,
+            site_name=site_folder,
+            url=pdf_url,
+            index=idx
+        )
     
     # Get URLs from sitemap(s)
     all_urls = []
@@ -264,13 +280,6 @@ async def crawl_with_sitemap(site_config, sitemap_url, threshold=0.30):
     failed_crawls = 0
     error_pages = 0
     
-    # Define patterns that indicate error pages
-    error_patterns = [
-        "Page Not Found",
-        "ERROR 404",
-        "error 404",
-        "Error 404",
-    ]
 
 
     markdown_generator = DefaultMarkdownGenerator(
@@ -322,7 +331,7 @@ async def crawl_with_sitemap(site_config, sitemap_url, threshold=0.30):
                         title = result.metadata.get('title', '').lower()
                     
                     # Check both content and title for error patterns
-                    for pattern in error_patterns:
+                    for pattern in ERROR_PATTERNS:
                         if pattern.lower() in content_lower or pattern.lower() in title:
                             is_error_page = True
                             break
@@ -472,13 +481,7 @@ async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: i
     failed_crawls = 0
     error_pages = 0
     
-    # Define error page patterns same as sitemap
-    error_patterns = [
-        "Page Not Found",
-        "ERROR 404", 
-        "error 404",
-        "Error 404",
-    ]
+    # Use module-level error patterns
     
     async with AsyncWebCrawler(config=browser_cfg) as cr:
         # Stricter link filter that checks the exact host
@@ -514,8 +517,8 @@ async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: i
             title_lower = title.lower()
             
             # Check both content and title for error patterns
-            for pattern in error_patterns:
-                if pattern in content_lower or pattern in title_lower:
+            for pattern in ERROR_PATTERNS:
+                if pattern.lower() in content_lower or pattern.lower() in title_lower:
                     is_error_page = True
                     break
             

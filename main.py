@@ -241,11 +241,12 @@ This document contains all PDF resources found on {site_config['base_url']}.
         print(f"📄 Created PDF index with {len(pdf_urls)} files")
     
     # Now continue with regular content crawling using sitemap URLs
-    # Configure browser and crawler
-    
-    # Crawler configuration
-    
-    
+    # Configure browser for sitemap crawling
+    browser_cfg = BrowserConfig(
+        headless=True,
+        browser_type="chrome",
+        verbose=False
+    )
     # Crawl URLs in batches
     batch_size = 100
     successful_crawls = 0
@@ -262,18 +263,18 @@ This document contains all PDF resources found on {site_config['base_url']}.
 
 
     markdown_generator = DefaultMarkdownGenerator(
-    content_filter=PruningContentFilter(threshold=threshold, threshold_type="fixed")
+        content_filter=PruningContentFilter(threshold=threshold, threshold_type="dynamic")
     )
 
     my_run_config = CrawlerRunConfig(
         markdown_generator=markdown_generator,
         check_robots_txt=True,
+        cache_mode=CacheMode.BYPASS,
         verbose=True,
         excluded_tags=["footer", "nav", "header"], # Remove entire tag blocks
-
     )
 
-    async with AsyncWebCrawler() as crawler:
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
         for i in range(0, len(all_urls), batch_size):
             batch = all_urls[i:i+batch_size]
             print(f"\n📦 Processing batch {i//batch_size + 1}/{(len(all_urls) + batch_size - 1)//batch_size}")
@@ -283,10 +284,8 @@ This document contains all PDF resources found on {site_config['base_url']}.
             
             # Process results
             for j, result in enumerate(results):
-                if j >= len(batch):  # Safety check
-                    continue
-                    
-                url = batch[j]
+                raw_url = batch[j]
+                url = getattr(result, 'url', raw_url)  # Use actual crawled URL if available
                 index = i + j + 1
                 
                 # Skip PDFs in regular content crawling since we already processed them
@@ -442,7 +441,7 @@ async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: i
 
 
     filter_chain = FilterChain([
-        DomainFilter(allowed_domains=["mymajor.fiu.edu"]),
+        DomainFilter(allowed_domains=[host]),
     ])
     
     browser_cfg = BrowserConfig()

@@ -189,6 +189,41 @@ async def crawl_with_sitemap(site_config, sitemap_url, threshold=0.30):
     # First extract all PDFs from the site using deep crawl
     pdf_urls = await extract_pdfs_from_site(site_config)
     print(f"📊 PDF Extraction: Found {len(pdf_urls)} unique PDF files")
+
+    # Crawl and save each PDF as its own Markdown
+    print(f"📄 Crawling and saving each PDF ({len(pdf_urls)})")
+    pdf_md_gen = DefaultMarkdownGenerator()
+    pdf_run_cfg = CrawlerRunConfig(
+        markdown_generator=pdf_md_gen,
+        check_robots_txt=False,
+        verbose=True
+    )
+    browser_cfg = BrowserConfig(
+        headless=True,
+        browser_type="chrome",
+        verbose=False
+    )
+    site_folder = site_config['name'].lower().replace(" ", "_")
+    async with AsyncWebCrawler(config=browser_cfg) as pdf_crawler:
+        for idx, pdf_url in enumerate(sorted(pdf_urls), start=1):
+            try:
+                pdf_result = await pdf_crawler.arun(url=pdf_url, config=pdf_run_cfg)
+                pdf_content = ""
+                if hasattr(pdf_result, 'markdown'):
+                    pdf_content = str(pdf_result.markdown)
+                metadata = {
+                    'title': pdf_result.metadata.get('title', 'PDF') if hasattr(pdf_result, 'metadata') else 'PDF',
+                    'crawled_at': datetime.now().isoformat()
+                }
+                save_markdown(
+                    content=pdf_content,
+                    metadata=metadata,
+                    site_name=site_folder,
+                    url=pdf_url,
+                    index=idx
+                )
+            except Exception as e:
+                print(f"  ❌ Error crawling PDF {pdf_url}: {e}")
     
     # Get URLs from sitemap(s)
     all_urls = []
@@ -203,42 +238,18 @@ async def crawl_with_sitemap(site_config, sitemap_url, threshold=0.30):
     # Remove duplicates
     all_urls = list(set(all_urls))
     print(f"\n🔗 Total unique URLs to crawl: {len(all_urls)}")
+
+    # Exclude PDFs already processed
+    pre_filter_count = len(all_urls)
+    all_urls = [u for u in all_urls if u not in pdf_urls]
+    excluded_pdfs = pre_filter_count - len(all_urls)
+    print(f"🚫 Excluded {excluded_pdfs} PDF URLs already processed; remaining URLs: {len(all_urls)}")
     
     if not all_urls:
         print("❌ No URLs found in sitemap(s)")
         return
     
-    # Create PDF index file
-    site_folder = site_config['name'].lower().replace(" ", "_")
-    if pdf_urls:
-        pdf_dir = Path("fiu_content") / site_folder
-        pdf_dir.mkdir(parents=True, exist_ok=True)
-        pdf_index_path = pdf_dir / "pdf_index.md"
-        
-        with open(pdf_index_path, "w", encoding="utf-8") as f:
-            f.write(f"""---
-url: {site_config['base_url']}/pdf_index
-site: {site_config['name']}
-crawled_at: {datetime.now().isoformat()}
-title: PDF Index - {site_config['name']}
----
-
-# PDF Resources for {site_config['name']}
-
-This document contains all PDF resources found on {site_config['base_url']}.
-
-## PDF Files ({len(pdf_urls)})
-
-""")
-            # Sort PDFs by filename for better organization
-            sorted_pdfs = sorted(pdf_urls, key=lambda x: x.split("/")[-1].lower())
-            for pdf_url in sorted_pdfs:
-                # Extract filename from URL for better display
-                filename = pdf_url.split("/")[-1]
-                # Create markdown link
-                f.write(f"- [{filename}]({pdf_url})\n")
-                
-        print(f"📄 Created PDF index with {len(pdf_urls)} files")
+    # (PDF index file creation removed; PDFs are now saved individually above)
     
     # Now continue with regular content crawling using sitemap URLs
     # Configure browser for sitemap crawling

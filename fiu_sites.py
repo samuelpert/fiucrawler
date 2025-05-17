@@ -43,6 +43,15 @@ FIU_SITES = {
             "https://parking.fiu.edu/_assets/sitemap.xml"
         ]
     },
+    "operations": {
+        "name": "Operations and Safety",
+        "base_url": "https://operations.fiu.edu/",
+        "sitemap_urls": [
+            "https://operations.fiu.edu/_assets/sitemap.xml"
+        ]
+    },
+
+
     "news": {
         "name": "FIU News",
         "base_url": "https://news.fiu.edu",
@@ -52,6 +61,19 @@ FIU_SITES = {
             "https://news.fiu.edu/insights/_assets/sitemap.xml"
         ]
     },
+
+
+    "shop": {
+        "name": "Shop FIU",
+        "base_url": "https://shop.fiu.edu/",
+        "sitemap_urls": [
+            "https://shop.fiu.edu/page-sitemap.xml",
+            "https://shop.fiu.edu/location-sitemap.xml",
+            "https://shop.fiu.edu/campus-sitemap.xml"
+        ]
+    },
+
+
     "dem": {
         "name": "Department of Emergency Management",
         "base_url": "https://dem.fiu.edu/",
@@ -66,8 +88,45 @@ FIU_SITES = {
     "scholarship": {
         "name": "FIU Scholarships",
         "base_url": "https://fiu.academicworks.com"
-        
+       
     },
+
+
+    "access": {
+        "name": "Student Access & Success",
+        "base_url": "https://sas.fiu.edu/"
+       
+    },
+
+
+    "connect": {
+        "name": "Panther Connect",
+        "base_url": "https://fiu.campuslabs.com/engage/"
+       
+    },
+
+
+    "athletics": {
+        "name": "Athletics",
+        "base_url": "https://fiusports.com/"
+       
+    },
+
+
+    "fiu": {
+        "name": "FIU",
+        "base_url": "https://www.fiu.edu"
+       
+    },
+
+
+    "calendar": {
+        "name": "FIU Calendar",
+        "base_url": "https://www.fiu.edu/academics/academic-calendar.html"
+       
+    },
+
+
     "majors": {
         "name": "My Major",
         "base_url": "https://mymajor.fiu.edu/"

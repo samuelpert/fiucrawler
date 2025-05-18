@@ -513,7 +513,7 @@ async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: i
             
             # Get metadata and title
             metadata = getattr(res, "metadata", {})
-            title = metadata.get('title', '')
+            title = metadata.get('title') or ''
             title_lower = title.lower()
             
             # Check both content and title for error patterns

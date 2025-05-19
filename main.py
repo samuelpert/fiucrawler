@@ -474,7 +474,8 @@ async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: i
         exclude_external_links=True,
         check_robots_txt=True,
         process_iframes=True,
-        remove_overlay_elements=True
+        remove_overlay_elements=True,
+        excluded_tags=["footer", "nav", "header"]  # Add header/footer exclusion
     )
     
     successful_crawls = 0

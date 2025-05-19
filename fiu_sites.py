@@ -66,11 +66,6 @@ FIU_SITES = {
     "shop": {
         "name": "Shop FIU",
         "base_url": "https://shop.fiu.edu/",
-        "sitemap_urls": [
-            "https://shop.fiu.edu/page-sitemap.xml",
-            "https://shop.fiu.edu/location-sitemap.xml",
-            "https://shop.fiu.edu/campus-sitemap.xml"
-        ]
     },
 
 

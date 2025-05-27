@@ -15,6 +15,13 @@ from fiu_sites import FIU_SITES
 import xml.etree.ElementTree as ET
 
 
+def normalize_url(url):
+    """Fix common URL issues like duplicated index.html"""
+    # Remove /index.html/ from the middle of paths (but keep final index.html)
+    normalized = url.replace('/index.html/', '/')
+    return normalized
+
+
 async def extract_pdfs_from_site(site_config):
     """Extract all PDF links from a website using deep crawl specifically for PDFs"""
     base_url = site_config['base_url']
@@ -104,7 +111,11 @@ def create_markdown_filename(url, index=None):
     filename = filename[:100]
     
     if index is not None:
-        filename = f"{index:03d}_{filename}"
+        # Handle both integer and string indexes
+        if isinstance(index, int):
+            filename = f"{index:03d}_{filename}"
+        else:
+            filename = f"{index}_{filename}"  # index is already formatted
     
     return f"{filename}.md"
 
@@ -410,8 +421,10 @@ async def crawl_with_sitemap(site_config, sitemap_url, threshold=0.30):
     print(f"  ⚠️ Error pages (404): {error_pages}")
     print(f"  📄 PDF files discovered: {len(pdf_urls)}")
     print(f"  📁 Total files: {successful_crawls + failed_crawls + error_pages + (1 if pdf_urls else 0)}")
+
     
     return successful_crawls, failed_crawls, error_pages, len(pdf_urls)
+
 
 
 async def check_for_sitemap(site_config):
@@ -481,6 +494,7 @@ async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: i
     successful_crawls = 0
     failed_crawls = 0
     error_pages = 0
+    error_urls = []  # Add this at the start of the function
     
     # Use module-level error patterns
     
@@ -529,6 +543,7 @@ async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: i
             
             if is_error_page:
                 error_pages += 1
+                error_urls.append(u)   # Add this line to collect error URLs
                 print(f"  ⚠️ Error page detected: {u}")
                 
                 # Save error page info
@@ -591,6 +606,131 @@ async def crawl_with_deep_crawl(site_cfg: dict, max_depth: int = 2, max_pages: i
     print(f"  ⚠️ Error pages (404): {error_pages}")
     print(f"  📁 Total files: {successful_crawls + failed_crawls + error_pages}")
     print(f"  💾 Content saved to: {Path('fiu_content') / site_folder}")
+
+    # After the main for loop in crawl_with_deep_crawl
+    if error_urls:
+        print(f"\n🔄 Attempting to normalize and retry {len(error_urls)} error URLs...")
+    
+    # Normalize and filter
+        normalized_urls = []
+        for url in error_urls:
+            normalized = normalize_url(url)
+            if normalized != url:  # Only retry if URL actually changed
+                normalized_urls.append(normalized)
+    
+    # Remove duplicates
+        normalized_urls = list(set(normalized_urls))
+    
+        if normalized_urls:
+            print(f"🔄 Retrying {len(normalized_urls)} normalized URLs...")
+    
+    # Create simple config for individual URL crawling
+            simple_config = CrawlerRunConfig(
+                markdown_generator=DefaultMarkdownGenerator(content_filter=PruningContentFilter(threshold, "fixed")),
+                cache_mode=CacheMode.BYPASS,
+                exclude_external_links=True,
+                check_robots_txt=True,
+                process_iframes=True,
+                remove_overlay_elements=True,
+                excluded_tags=["footer", "nav", "header"]
+            )
+    
+            async with AsyncWebCrawler(config=browser_cfg) as crawler:
+                results = await crawler.arun_many(
+                    urls=normalized_urls,
+                    config=simple_config,
+                )
+        
+                retry_successful = 0
+                retry_failed = 0
+        
+                for idx, result in enumerate(results, start=1):
+                    u = result.url if hasattr(result, 'url') else normalized_urls[idx-1]
+            
+                    if result.success:
+                # Extract markdown content (copied from main loop)
+                        content = ""
+                        if hasattr(result, "markdown"):
+                            if isinstance(result.markdown, str):
+                                content = result.markdown
+                            elif hasattr(result.markdown, "fit_markdown"):
+                                content = str(result.markdown.fit_markdown)
+                            else:
+                                content = str(result.markdown)
+                
+                # Check for error page patterns (copied from main loop)
+                        content_lower = content.lower()
+                        is_error_page = False
+                
+                        metadata = getattr(result, "metadata", {})
+                        title = metadata.get('title') or ''
+                        title_lower = title.lower()
+                
+                        for pattern in ERROR_PATTERNS:
+                            if pattern.lower() in content_lower or pattern.lower() in title_lower:
+                                is_error_page = True
+                                break
+                
+                        if hasattr(result, 'status_code') and result.status_code == 404:
+                            is_error_page = True
+                
+                        if not is_error_page and len(content.strip()) >= 100:
+                    # Save to main folder with retry prefix
+                            enhanced_metadata = {
+                                'title': title if title else 'No title',
+                                'crawled_at': datetime.now().isoformat(),
+                                'retry_attempt': True
+                            }
+                            enhanced_metadata.update(metadata)
+                    
+                            save_markdown(content, enhanced_metadata, site_folder, u, index=f"retry_{idx:03d}")
+                            retry_successful += 1
+                            print(f"  ✅ Retry successful: {u}")
+                        else:
+                    # Still an error or insufficient content, save to error folder
+                            error_metadata = {
+                                'title': 'Still Error After Retry',
+                                'crawled_at': datetime.now().isoformat(),
+                                'retry_attempt': True,
+                                'error_type': 'still_error_after_normalization'
+                            }
+                    
+                            save_markdown(
+                                content=f"Still error page after URL normalization retry.\n\n{content[:500]}...",
+                                metadata=error_metadata,
+                                site_name=site_folder + "_errors",
+                                url=u,
+                                index=f"retry_{idx:03d}"
+                            )
+                            retry_failed += 1
+                            print(f"  ⚠️ Still error after retry: {u}")
+                    else:
+                        # Failed to crawl even after normalization
+                        error_metadata = {
+                            'title': 'Retry Crawl Failed',
+                            'crawled_at': datetime.now().isoformat(),
+                            'retry_attempt': True,
+                            'error': str(result.error) if hasattr(result, 'error') else 'Unknown error'
+                        }
+                
+                        save_markdown(
+                            content=f"Failed to crawl even after URL normalization: {error_metadata['error']}",
+                            metadata=error_metadata,
+                            site_name=site_folder + "_errors",
+                            url=u,
+                            index=f"retry_{idx:03d}"
+                        )
+                        retry_failed += 1
+                        print(f"  ❌ Retry failed: {u}")
+    
+    # Update final statistics
+            successful_crawls += retry_successful
+            print(f"\n📊 Retry Summary:")
+            print(f"  ✅ Retry successful: {retry_successful}")
+            print(f"  ❌ Retry failed: {retry_failed}")
+        
+
+
     
     # RETURN THE STATISTICS!
     return successful_crawls, failed_crawls, error_pages

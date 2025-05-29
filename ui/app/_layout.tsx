@@ -1,6 +1,5 @@
-// app/_layout.tsx
-import { ChatScreen } from "../src/screens/ChatScreen";
+import { RoaryChatScreen } from "../src/screens/RoaryChatScreen";
 
 export default function RootLayout() {
-  return <ChatScreen />;
+  return <RoaryChatScreen />;
 }

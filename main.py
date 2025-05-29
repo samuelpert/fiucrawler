@@ -19,6 +19,8 @@ def normalize_url(url):
     """Fix common URL issues like duplicated index.html"""
     # Remove /index.html/ from the middle of paths (but keep final index.html)
     normalized = url.replace('/index.html/', '/')
+
+    # Fix about patterns (add your specific pattern here)
     return normalized
 
 

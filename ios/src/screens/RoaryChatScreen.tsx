@@ -645,6 +645,8 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 30, // Add safe area bottom padding
     backgroundColor: "transparent",
+    borderRadius: 30,
+    marginBottom: -45, // Negative margin to extend beyond safe area
   },
   inputWrapper: {
     flexDirection: "row",

@@ -13,6 +13,7 @@ import {
   Image,
   Alert,
 } from "react-native";
+import Markdown from "react-native-markdown-display";
 import { n8nService } from "../services/n8nServices";
 
 const { width } = Dimensions.get("window");
@@ -73,6 +74,50 @@ export const RoaryChatScreen: React.FC = () => {
       backgroundColor: isDark ? "#2a2a2a" : "#f8f8f8",
       color: isDark ? "#ffffff" : "#000000",
       borderColor: isDark ? "#3a3a3a" : "#e0e0e0",
+    },
+  };
+
+  // Markdown styles for AI messages, now theme-aware and with corrected types
+  const markdownStyles = {
+    body: {
+      fontSize: 16,
+      lineHeight: 22,
+      color: themeStyles.text.color,
+    },
+    heading1: {
+      fontSize: 24,
+      fontWeight: "bold" as "bold",
+      marginBottom: 8,
+      color: themeStyles.text.color,
+    },
+    heading2: {
+      fontSize: 20,
+      fontWeight: "bold" as "bold",
+      marginBottom: 6,
+      color: themeStyles.text.color,
+    },
+    heading3: {
+      fontSize: 18,
+      fontWeight: "bold" as "bold",
+      marginBottom: 4,
+      color: themeStyles.text.color,
+    },
+    strong: {
+      fontWeight: "bold" as "bold",
+    },
+    link: {
+      color: "#007AFF", // Standard link blue
+      textDecorationLine: "underline" as "underline",
+    },
+    list_item: {
+      marginBottom: 4,
+      // Text color will be inherited from 'body'
+    },
+    bullet_list: {
+      marginBottom: 8,
+    },
+    ordered_list: {
+      marginBottom: 8,
     },
   };
 
@@ -218,7 +263,10 @@ export const RoaryChatScreen: React.FC = () => {
         {/* Header Section */}
         <View style={styles.header}>
           <View style={styles.logo}>
-            <Text style={styles.logoText}>🦁</Text>
+            <Image
+              source={require("../../assets/images/roary-logo.png")}
+              style={styles.logoImage}
+            />
           </View>
 
           <Text style={[styles.title, themeStyles.text]}>Roary</Text>
@@ -253,14 +301,13 @@ export const RoaryChatScreen: React.FC = () => {
                     message.isUser ? styles.userBubble : styles.aiBubble,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.messageText,
-                      message.isUser ? styles.userText : themeStyles.text,
-                    ]}
-                  >
-                    {message.text}
-                  </Text>
+                  {message.isUser ? (
+                    <Text style={[styles.messageText, styles.userText]}>
+                      {message.text}
+                    </Text>
+                  ) : (
+                    <Markdown style={markdownStyles}>{message.text}</Markdown>
+                  )}
                   <Text
                     style={[
                       styles.timestamp,
@@ -385,6 +432,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
+  },
+  logoImage: {
+    width: 40,
+    height: 40,
+    resizeMode: "contain",
   },
   logoText: {
     fontSize: 30,

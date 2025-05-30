@@ -28,3 +28,5 @@ ENV/
 *.swp
 *.swo
 
+fiu_content/
+

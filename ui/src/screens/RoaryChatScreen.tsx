@@ -76,58 +76,137 @@ export const RoaryChatScreen: React.FC = () => {
     },
   };
 
+  const addMessage = (text: string, isUser: boolean) => {
+    const newMessage = {
+      id: Date.now().toString(),
+      text,
+      isUser,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, newMessage]);
+  };
+
   const handlePromptPress = async (prompt: (typeof SUGGESTED_PROMPTS)[0]) => {
-    const message = prompt.title + " " + prompt.subtitle;
+    const message = prompt.subtitle; // Use the subtitle as the actual message
     setInputText(message);
 
-    // Call N8N workflow
+    // Add user message to chat
+    addMessage(message, true);
+    setLoading(true);
+
     try {
-      const response = await n8nService.callWorkflow(prompt.workflowId, {
-        message,
-      });
+      // Try GET method first for specific workflows
+      const response = await n8nService.executeTask(
+        "prompt",
+        { prompt: prompt.subtitle },
+        prompt.workflowId,
+        "GET"
+      );
 
       if (response.success) {
-        Alert.alert("N8N Response", response.message || "Success!");
+        // Extract the actual AI response
+        let aiMessage = response.message || "No response from AI";
+
+        // Log the full response for debugging
+        console.log("Full N8N Response:", response);
+        console.log("AI Message:", aiMessage);
+
+        addMessage(aiMessage, false);
+        setInputText(""); // Clear input
       } else {
-        Alert.alert("N8N Error", response.error || "Something went wrong");
+        addMessage(`Error: ${response.error || "Something went wrong"}`, false);
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to connect to N8N");
-      console.error("N8N Error:", error);
+      console.error("Prompt Error:", error);
+      addMessage("Error: Failed to connect to N8N", false);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
-    // Call N8N with the input message
+    const messageText = inputText.trim();
+    addMessage(messageText, true);
+    setInputText("");
+    setLoading(true);
+
     try {
-      const response = await n8nService.sendChatMessage(inputText.trim());
+      // Try GET method first, then POST if it fails
+      let response = await n8nService.sendChatMessage(messageText);
+
+      if (!response.success) {
+        console.log("GET failed, trying POST method...");
+        response = await n8nService.sendChatMessagePOST(messageText);
+      }
 
       if (response.success) {
-        Alert.alert(
-          "N8N Response",
-          response.message || "Message sent successfully!"
-        );
-        setInputText(""); // Clear input after successful send
+        // Extract the actual AI response
+        let aiMessage = response.message || "No response from AI";
+
+        // Log the full response for debugging
+        console.log("Full N8N Response:", response);
+        console.log("AI Message:", aiMessage);
+
+        addMessage(aiMessage, false);
       } else {
-        Alert.alert("N8N Error", response.error || "Failed to send message");
+        addMessage(
+          `Error: ${response.error || "Failed to send message"}`,
+          false
+        );
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to connect to N8N");
-      console.error("N8N Error:", error);
+      console.error("Send Message Error:", error);
+      addMessage("Error: Failed to connect to N8N", false);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Test N8N connection function
+  // Enhanced test function with debug capabilities
   const testN8NConnection = async () => {
-    const isConnected = await n8nService.testConnection();
-    Alert.alert(
-      "N8N Connection Test",
-      isConnected
-        ? "✅ Connected to N8N!"
-        : "❌ Cannot connect to N8N. Make sure it's running on localhost:5678"
-    );
+    setLoading(true);
+
+    try {
+      // Test basic connection
+      console.log("Testing basic connection...");
+      const basicTest = await n8nService.testConnection();
+
+      if (basicTest) {
+        Alert.alert(
+          "N8N Connection Test",
+          "✅ Basic connection successful!\n\nTesting AI response..."
+        );
+
+        // Test with debug function to see response structure
+        const debugResponse = await n8nService.debugResponse(
+          "Hello, this is a test message"
+        );
+
+        console.log("Debug test completed:", debugResponse);
+
+        Alert.alert(
+          "N8N AI Response Test",
+          debugResponse.success
+            ? `✅ AI response received!\nResponse: ${debugResponse.message}\n\nCheck console for full response structure.`
+            : `⚠️ AI test failed: ${debugResponse.error}`
+        );
+      } else {
+        Alert.alert(
+          "N8N Connection Test",
+          "❌ Cannot connect to N8N.\n\nMake sure:\n• N8N is running on localhost:5678\n• Your webhook is configured correctly\n• The workflow ID 'roary-chat' exists"
+        );
+      }
+    } catch (error) {
+      console.error("Test error:", error);
+      Alert.alert(
+        "N8N Connection Test",
+        `❌ Test failed with error:\n${error}`
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -138,12 +217,8 @@ export const RoaryChatScreen: React.FC = () => {
       >
         {/* Header Section */}
         <View style={styles.header}>
-          {/* Logo placeholder - we'll add an actual logo later */}
           <View style={styles.logo}>
-            <Image
-              source={require("../../assets/images/roary-logo.png")}
-              style={styles.logoImage}
-            />
+            <Text style={styles.logoText}>🦁</Text>
           </View>
 
           <Text style={[styles.title, themeStyles.text]}>Roary</Text>
@@ -151,15 +226,16 @@ export const RoaryChatScreen: React.FC = () => {
             How can I help you today?
           </Text>
 
-          {/* Test N8N Button - only show when no messages */}
-          {messages.length === 0 && (
-            <TouchableOpacity
-              style={styles.testButton}
-              onPress={testN8NConnection}
-            >
-              <Text style={styles.testButtonText}>Test N8N Connection</Text>
-            </TouchableOpacity>
-          )}
+          {/* Test N8N Button - show different text based on state */}
+          <TouchableOpacity
+            style={[styles.testButton, loading && styles.testButtonDisabled]}
+            onPress={testN8NConnection}
+            disabled={loading}
+          >
+            <Text style={styles.testButtonText}>
+              {loading ? "Testing..." : "Test N8N Connection"}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Messages Section - Show when there are messages */}
@@ -222,9 +298,14 @@ export const RoaryChatScreen: React.FC = () => {
               {SUGGESTED_PROMPTS.map((prompt) => (
                 <TouchableOpacity
                   key={prompt.id}
-                  style={[styles.promptCard, themeStyles.card]}
+                  style={[
+                    styles.promptCard,
+                    themeStyles.card,
+                    loading && styles.promptCardDisabled,
+                  ]}
                   onPress={() => handlePromptPress(prompt)}
                   activeOpacity={0.7}
+                  disabled={loading}
                 >
                   <Text style={[styles.promptTitle, themeStyles.text]}>
                     {prompt.title}
@@ -235,7 +316,6 @@ export const RoaryChatScreen: React.FC = () => {
                     {prompt.subtitle}
                   </Text>
 
-                  {/* Arrow icon */}
                   <View style={styles.promptIcon}>
                     <Text style={[styles.arrowIcon, themeStyles.subtitleText]}>
                       ↗
@@ -258,14 +338,14 @@ export const RoaryChatScreen: React.FC = () => {
             placeholder="Send a Message"
             placeholderTextColor={isDark ? "#666666" : "#999999"}
             multiline
+            editable={!loading}
           />
 
-          {/* Icons */}
           <View style={styles.inputIcons}>
             <TouchableOpacity
               style={[styles.iconButton, loading && styles.sendButtonDisabled]}
               onPress={handleSendMessage}
-              disabled={loading}
+              disabled={loading || !inputText.trim()}
             >
               <Text style={[styles.icon, themeStyles.subtitleText]}>
                 {loading ? "..." : "↑"}
@@ -274,7 +354,6 @@ export const RoaryChatScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Bottom disclaimer */}
         <Text style={[styles.disclaimer, themeStyles.subtitleText]}>
           LLMs can make mistakes. Verify important information.
         </Text>
@@ -302,18 +381,13 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(255, 165, 0, 0.2)",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
   },
-  logoImage: {
-    width: 50,
-    height: 50,
-    resizeMode: "contain",
-  },
   logoText: {
-    fontSize: 24,
+    fontSize: 30,
   },
   title: {
     fontSize: 32,
@@ -325,23 +399,27 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Test button - minimal styling
+  // Test button
   testButton: {
     backgroundColor: "#007AFF",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
     marginTop: 16,
+  },
+  testButtonDisabled: {
+    backgroundColor: "#ccc",
   },
   testButtonText: {
     color: "#fff",
-    fontSize: 12,
+    fontSize: 14,
+    fontWeight: "600",
   },
 
   // Messages
   messagesContainer: {
     flex: 1,
-    paddingBottom: 100, // Space for input area
+    paddingBottom: 100,
   },
   messagesList: {
     flex: 1,
@@ -352,10 +430,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     marginVertical: 4,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 1,
@@ -393,7 +468,7 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
 
-  // Suggestions Styles
+  // Suggestions
   suggestionsContainer: {
     flex: 1,
     paddingBottom: 20,
@@ -412,16 +487,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     position: "relative",
-    // Shadow for iOS
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    // Shadow for Android
     elevation: 2,
+  },
+  promptCardDisabled: {
+    opacity: 0.6,
   },
   promptTitle: {
     fontSize: 16,
@@ -441,7 +514,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  // Input Styles
+  // Input
   inputContainer: {
     padding: 16,
     borderRadius: 30,
@@ -462,11 +535,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 8,
     minHeight: 48,
-  },
-  inputPrefix: {
-    fontSize: 18,
-    marginRight: 12,
-    marginBottom: 2,
   },
   textInput: {
     flex: 1,

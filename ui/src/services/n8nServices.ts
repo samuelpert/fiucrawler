@@ -21,7 +21,7 @@ class N8NService {
   }
 
   /**
-   * Call a specific N8N webhook workflow
+   * Call a specific N8N webhook workflow with proper query params
    */
   async callWorkflow(
     webhookId: string,
@@ -41,16 +41,29 @@ class N8NService {
         method,
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json", // Often good to specify accept header
+          Accept: "application/json",
         },
       };
 
+      // For POST requests, send data in body
       if (method === "POST" && payload) {
         requestOptions.body = JSON.stringify(payload);
       }
 
-      const response = await fetch(url, requestOptions);
-      const responseText = await response.text(); // Read response text first
+      // For GET requests, add data as query parameters
+      let finalUrl = url;
+      if (method === "GET" && payload) {
+        const queryParams = new URLSearchParams();
+        Object.keys(payload).forEach(key => {
+          queryParams.append(key, String(payload[key]));
+        });
+        finalUrl = `${url}?${queryParams.toString()}`;
+      }
+
+      console.log(`Making request to: ${finalUrl}`);
+
+      const response = await fetch(finalUrl, requestOptions);
+      const responseText = await response.text();
 
       if (!response.ok) {
         console.error(
@@ -65,29 +78,54 @@ class N8NService {
       console.log("Raw N8N webhook response text:", responseText);
 
       if (!responseText) {
-        // Handle empty response if it's not expected to be an error
         console.warn("N8N webhook returned an empty response.");
-        // Depending on your N8N workflow, an empty response might be successful
-        // If an empty response for a particular workflow implies success with no data:
-        // return { success: true, message: "Workflow executed, empty response received." };
-        // Or, if JSON is always expected:
-        throw new Error("Received empty response, expected JSON.");
+        return { 
+          success: true, 
+          message: "Workflow executed successfully (empty response)" 
+        };
       }
 
-      const data = JSON.parse(responseText); // Parse text to JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        // If response isn't JSON, treat the text as the message
+        console.log("Response is not JSON, treating as plain text");
+        return {
+          success: true,
+          message: responseText,
+          data: { rawResponse: responseText }
+        };
+      }
+
+      // Extract AI response from n8n workflow data
+      let aiResponse = "No AI response found";
+      
+      // Based on your log, the AI response is in data[0].output
+      if (Array.isArray(data) && data.length > 0 && data[0].output) {
+        aiResponse = data[0].output;
+      } else if (data.output) {
+        aiResponse = data.output;
+      } else if (data.text) {
+        aiResponse = data.text;
+      } else if (data.response) {
+        aiResponse = data.response;
+      } else if (data.message && data.message !== "Workflow executed successfully") {
+        aiResponse = data.message;
+      } else if (data.result) {
+        aiResponse = data.result;
+      }
+
+      console.log("Extracted AI response:", aiResponse);
+      console.log("Full n8n response data:", JSON.stringify(data, null, 2));
 
       return {
         success: true,
-        message:
-          data.message ||
-          data.response ||
-          data.output ||
-          "Workflow executed successfully",
+        message: aiResponse,
         data: data,
       };
     } catch (error: any) {
       console.error("N8N Workflow Error in callWorkflow:", error);
-      // Check if error is already an N8NResponse-like structure
       if (error.success === false && error.error) {
         return error;
       }
@@ -100,16 +138,33 @@ class N8NService {
 
   /**
    * Send a chat message to N8N workflow
+   * Uses POST method with chatInput field that AI Agent expects
    */
   async sendChatMessage(
     message: string,
-    workflowId: string = "roary-chat" // Default workflow ID for chat
+    workflowId: string = "roary-chat"
+  ): Promise<N8NResponse> {
+    // Send as POST request with chatInput field for AI Agent
+    return this.callWorkflow(workflowId, {
+      chatInput: message,  // AI Agent expects this field name
+      message,             // Keep original for compatibility
+      timestamp: new Date().toISOString(),
+      type: "chat"
+    }, "POST");
+  }
+
+  /**
+   * Send a chat message using POST method (alternative)
+   */
+  async sendChatMessagePOST(
+    message: string,
+    workflowId: string = "roary-chat"
   ): Promise<N8NResponse> {
     return this.callWorkflow(workflowId, {
       message,
       timestamp: new Date().toISOString(),
-      type: "chat", // Standardized type for chat messages
-    });
+      type: "chat"
+    }, "POST");
   }
 
   /**
@@ -118,7 +173,8 @@ class N8NService {
   async executeTask(
     taskType: string,
     parameters: any,
-    workflowId: string // Make workflowId required for specific tasks
+    workflowId: string,
+    method: "GET" | "POST" = "POST"
   ): Promise<N8NResponse> {
     if (!workflowId) {
       console.error("Workflow ID is required for executeTask");
@@ -131,40 +187,89 @@ class N8NService {
       taskType,
       parameters,
       timestamp: new Date().toISOString(),
-      type: "task", // Standardized type for tasks
-    });
+      type: "task"
+    }, method);
   }
 
   /**
-   * Test N8N connection using a generic chat message
+   * Test N8N connection - tries both GET and POST methods
    */
   async testConnection(
-    testWorkflowId: string = "roary-chat" // Use a common workflow for testing
+    testWorkflowId: string = "roary-chat"
   ): Promise<boolean> {
     console.log(`Testing N8N connection with workflow: ${testWorkflowId}`);
+    
     try {
-      const response = await this.sendChatMessage(
-        "N8N connection test message",
-        testWorkflowId
-      );
-      console.log("N8N test connection response:", response);
-      return response.success;
+      // First try GET method
+      console.log("Testing with GET method...");
+      const getResponse = await this.callWorkflow(testWorkflowId, {
+        message: "N8N connection test (GET)",
+        test: true
+      }, "GET");
+      
+      if (getResponse.success) {
+        console.log("GET method test successful:", getResponse);
+        return true;
+      }
     } catch (error) {
-      console.error("N8N connection test failed:", error);
+      console.log("GET method failed, trying POST...");
+    }
+
+    try {
+      // Then try POST method
+      console.log("Testing with POST method...");
+      const postResponse = await this.callWorkflow(testWorkflowId, {
+        message: "N8N connection test (POST)",
+        test: true
+      }, "POST");
+      
+      console.log("POST method test response:", postResponse);
+      return postResponse.success;
+    } catch (error) {
+      console.error("Both GET and POST methods failed:", error);
       return false;
+    }
+  }
+
+  /**
+   * Debug function to see the full n8n response structure
+   */
+  async debugResponse(
+    message: string = "Debug test message",
+    workflowId: string = "roary-chat"
+  ): Promise<N8NResponse> {
+    try {
+      const response = await this.callWorkflow(workflowId, {
+        chatInput: message,
+        message,
+        timestamp: new Date().toISOString(),
+        type: "debug"
+      }, "POST");
+
+      // Log the full structure for debugging
+      console.log("=== N8N DEBUG RESPONSE ===");
+      console.log("Full response object:", response);
+      console.log("Response data:", JSON.stringify(response.data, null, 2));
+      console.log("========================");
+
+      return response;
+    } catch (error: any) {
+      console.error("Debug request failed:", error);
+      return {
+        success: false,
+        error: error.message || "Debug request failed"
+      };
     }
   }
 }
 
 // Pre-configured workflows for common tasks
-// Ensure these webhook IDs match the 'Path' in your N8N Webhook nodes
 export const N8N_WORKFLOWS = {
-  ROARY_CHAT: "roary-chat", // Example: for general chat
-  IMPORTANT_DATES: "important-dates",
+  ROARY_CHAT: "roary-chat",
+  IMPORTANT_DATES: "important-dates", 
   PROSPECTIVE_STUDENTS: "prospective-students",
   ALUMNI_SERVICES: "alumni-services",
   SECURITY_TIPS: "security-tips",
-  // Add more workflow IDs as needed
 };
 
 export const n8nService = new N8NService();

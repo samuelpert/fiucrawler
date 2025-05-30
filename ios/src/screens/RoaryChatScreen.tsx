@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     height: width * 0.8, // Keep it square, adjust as needed
     transform: [
       { translateX: -(width * 0.4) }, // Half of width to center
-      { translateY: -(width * 0.4) }, // Half of height to center
+      { translateY: -(width * 0.3) }, // Half of height to center
     ],
     opacity: 0.1, // Very transparent (10% opacity)
     zIndex: -1, // Behind all content

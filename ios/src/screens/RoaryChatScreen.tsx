@@ -282,6 +282,13 @@ export const RoaryChatScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, themeStyles.container]}>
+      {/* Background Image */}
+      <Image
+        source={require("../../assets/images/fiu-motto.png")}
+        style={styles.backgroundImage}
+        resizeMode="contain"
+      />
+
       <KeyboardAvoidingView
         style={styles.keyboardAvoidingView}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -470,6 +477,21 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 20,
     paddingBottom: 120, // Add padding to account for input area
+  },
+
+  // Background Image
+  backgroundImage: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    width: width * 0.8, // 80% of screen width
+    height: width * 0.8, // Keep it square, adjust as needed
+    transform: [
+      { translateX: -(width * 0.4) }, // Half of width to center
+      { translateY: -(width * 0.4) }, // Half of height to center
+    ],
+    opacity: 0.1, // Very transparent (10% opacity)
+    zIndex: -1, // Behind all content
   },
 
   // Header Styles

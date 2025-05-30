@@ -235,51 +235,6 @@ export const RoaryChatScreen: React.FC = () => {
     }
   };
 
-  // Enhanced test function with debug capabilities
-  const testN8NConnection = async () => {
-    setLoading(true);
-
-    try {
-      // Test basic connection
-      console.log("Testing basic connection...");
-      const basicTest = await n8nService.testConnection();
-
-      if (basicTest) {
-        Alert.alert(
-          "N8N Connection Test",
-          "✅ Basic connection successful!\n\nTesting AI response..."
-        );
-
-        // Test with debug function to see response structure
-        const debugResponse = await n8nService.debugResponse(
-          "Hello, this is a test message"
-        );
-
-        console.log("Debug test completed:", debugResponse);
-
-        Alert.alert(
-          "N8N AI Response Test",
-          debugResponse.success
-            ? `✅ AI response received!\nResponse: ${debugResponse.message}\n\nCheck console for full response structure.`
-            : `⚠️ AI test failed: ${debugResponse.error}`
-        );
-      } else {
-        Alert.alert(
-          "N8N Connection Test",
-          "❌ Cannot connect to N8N.\n\nMake sure:\n• N8N is running on localhost:5678\n• Your webhook is configured correctly\n• The workflow ID 'roary-chat' exists"
-        );
-      }
-    } catch (error) {
-      console.error("Test error:", error);
-      Alert.alert(
-        "N8N Connection Test",
-        `❌ Test failed with error:\n${error}`
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <SafeAreaView style={[styles.container, themeStyles.container]}>
       {/* Background Image */}
@@ -322,17 +277,6 @@ export const RoaryChatScreen: React.FC = () => {
             <Text style={[styles.subtitle, themeStyles.subtitleText]}>
               How can I help you today?
             </Text>
-
-            {/* Test N8N Button - show different text based on state */}
-            <TouchableOpacity
-              style={[styles.testButton, loading && styles.testButtonDisabled]}
-              onPress={testN8NConnection}
-              disabled={loading}
-            >
-              <Text style={styles.testButtonText}>
-                {loading ? "Testing..." : "Test N8N Connection"}
-              </Text>
-            </TouchableOpacity>
           </View>
 
           {/* Messages Section - Show when there are messages */}
@@ -541,23 +485,6 @@ const styles = StyleSheet.create({
   clearButtonIcon: {
     fontSize: 15,
     color: "#ff4444",
-  },
-
-  // Test button
-  testButton: {
-    backgroundColor: "#007AFF",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  testButtonDisabled: {
-    backgroundColor: "#ccc",
-  },
-  testButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
   },
 
   // Messages

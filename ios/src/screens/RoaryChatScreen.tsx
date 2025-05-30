@@ -566,9 +566,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    opacity: 0.6,
   },
   promptCardDisabled: {
-    opacity: 0.6,
+    opacity: 0.3,
   },
   promptTitle: {
     fontSize: 16,

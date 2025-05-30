@@ -1,5 +1,5 @@
 // src/services/n8nService.ts
-const N8N_BASE_URL = "http://localhost:5678"; // Ensure this is correct for your environment
+const N8N_BASE_URL = "http://10.108.110.228:5678";
 
 export interface N8NResponse {
   success: boolean;

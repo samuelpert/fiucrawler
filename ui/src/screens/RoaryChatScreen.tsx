@@ -131,6 +131,28 @@ export const RoaryChatScreen: React.FC = () => {
     setMessages((prev) => [...prev, newMessage]);
   };
 
+  // Clear Chat function with confirmation dialog
+  const clearChat = () => {
+    Alert.alert(
+      "Clear Chat",
+      "Are you sure you want to clear the chat? This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: () => {
+            setMessages([]);
+            console.log("Chat cleared");
+          },
+        },
+      ]
+    );
+  };
+
   const handlePromptPress = async (prompt: (typeof SUGGESTED_PROMPTS)[0]) => {
     const message = prompt.subtitle; // Use the subtitle as the actual message
     setInputText(message);
@@ -262,6 +284,17 @@ export const RoaryChatScreen: React.FC = () => {
       >
         {/* Header Section */}
         <View style={styles.header}>
+          {/* Clear Chat Button - Only show when there are messages */}
+          {messages.length > 0 && (
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={clearChat}
+              disabled={loading}
+            >
+              <Text style={styles.clearButtonIcon}>🗑️</Text>
+            </TouchableOpacity>
+          )}
+
           <View style={styles.logo}>
             <Image
               source={require("../../assets/images/roary-logo.png")}
@@ -423,6 +456,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 60,
     paddingBottom: 40,
+    position: "relative", // Added for absolute positioning of clear button
   },
   logo: {
     width: 60,
@@ -434,8 +468,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   logoImage: {
-    width: 40,
-    height: 40,
+    width: 50,
+    height: 50,
     resizeMode: "contain",
   },
   logoText: {
@@ -449,6 +483,21 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 18,
     textAlign: "center",
+  },
+
+  // Clear Chat Button
+  clearButton: {
+    position: "absolute",
+    top: 20,
+    right: 0,
+    padding: 12,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 0, 0, 0.1)",
+    zIndex: 1,
+  },
+  clearButtonIcon: {
+    fontSize: 15,
+    color: "#ff4444",
   },
 
   // Test button
@@ -480,7 +529,7 @@ const styles = StyleSheet.create({
     maxWidth: "85%",
     padding: 14,
     borderRadius: 18,
-    marginVertical: 4,
+    marginVertical: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,

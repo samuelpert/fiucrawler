@@ -1,10 +1,11 @@
 // src/screens/RoaryChatScreen.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
+  KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
   SafeAreaView,
@@ -12,6 +13,8 @@ import {
   Dimensions,
   Image,
   Alert,
+  Platform,
+  Keyboard,
 } from "react-native";
 import Markdown from "react-native-markdown-display";
 import { n8nService } from "../services/n8nServices";
@@ -24,25 +27,25 @@ const SUGGESTED_PROMPTS = [
     id: 1,
     title: "Important Dates",
     subtitle: "When does fall start?",
-    workflowId: "important-dates",
+    workflowId: "roary-chat",
   },
   {
     id: 2,
     title: "Prospective Students",
     subtitle: "What is the application deadline?",
-    workflowId: "prospective-students",
+    workflowId: "roary-chat",
   },
   {
     id: 3,
     title: "Alumni",
     subtitle: "How do I get in touch with my old classmates?",
-    workflowId: "alumni-services",
+    workflowId: "roary-chat",
   },
   {
     id: 4,
     title: "Security Tips",
     subtitle: "How can I browse safely?",
-    workflowId: "security-tips",
+    workflowId: "roary-chat",
   },
 ];
 
@@ -52,8 +55,30 @@ export const RoaryChatScreen: React.FC = () => {
     Array<{ id: string; text: string; isUser: boolean; timestamp: Date }>
   >([]);
   const [loading, setLoading] = useState(false);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
+
+  // Keyboard listeners
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        setKeyboardVisible(true);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardDidHideListener?.remove();
+      keyboardDidShowListener?.remove();
+    };
+  }, []);
 
   // Dynamic styles based on theme
   const themeStyles = {
@@ -77,33 +102,34 @@ export const RoaryChatScreen: React.FC = () => {
     },
   };
 
-  // Markdown styles for AI messages, now theme-aware and with corrected types
+  // Markdown styles for AI messages - Fixed with black text for light AI bubbles
   const markdownStyles = {
     body: {
       fontSize: 16,
       lineHeight: 22,
-      color: themeStyles.text.color,
+      color: "#000000", // Always black text for AI messages
     },
     heading1: {
       fontSize: 24,
       fontWeight: "bold" as "bold",
       marginBottom: 8,
-      color: themeStyles.text.color,
+      color: "#000000", // Always black text
     },
     heading2: {
       fontSize: 20,
       fontWeight: "bold" as "bold",
       marginBottom: 6,
-      color: themeStyles.text.color,
+      color: "#000000", // Always black text
     },
     heading3: {
       fontSize: 18,
       fontWeight: "bold" as "bold",
       marginBottom: 4,
-      color: themeStyles.text.color,
+      color: "#000000", // Always black text
     },
     strong: {
       fontWeight: "bold" as "bold",
+      color: "#000000", // Always black text for bold
     },
     link: {
       color: "#007AFF", // Standard link blue
@@ -111,7 +137,7 @@ export const RoaryChatScreen: React.FC = () => {
     },
     list_item: {
       marginBottom: 4,
-      // Text color will be inherited from 'body'
+      color: "#000000", // Always black text for list items
     },
     bullet_list: {
       marginBottom: 8,
@@ -162,13 +188,8 @@ export const RoaryChatScreen: React.FC = () => {
     setLoading(true);
 
     try {
-      // Try GET method first for specific workflows
-      const response = await n8nService.executeTask(
-        "prompt",
-        { prompt: prompt.subtitle },
-        prompt.workflowId,
-        "GET"
-      );
+      // Use the same method as regular chat messages
+      const response = await n8nService.sendChatMessage(message);
 
       if (response.success) {
         // Extract the actual AI response
@@ -278,166 +299,182 @@ export const RoaryChatScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, themeStyles.container]}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
-        {/* Header Section */}
-        <View style={styles.header}>
-          {/* Clear Chat Button - Only show when there are messages */}
-          {messages.length > 0 && (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header Section */}
+          <View style={styles.header}>
+            {/* Clear Chat Button - Only show when there are messages */}
+            {messages.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={clearChat}
+                disabled={loading}
+              >
+                <Text style={styles.clearButtonIcon}>🗑️</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.logo}>
+              <Image
+                source={require("../../assets/images/roary-logo.png")}
+                style={styles.logoImage}
+              />
+            </View>
+
+            <Text style={[styles.title, themeStyles.text]}>Roary</Text>
+            <Text style={[styles.subtitle, themeStyles.subtitleText]}>
+              How can I help you today?
+            </Text>
+
+            {/* Test N8N Button - show different text based on state */}
             <TouchableOpacity
-              style={styles.clearButton}
-              onPress={clearChat}
+              style={[styles.testButton, loading && styles.testButtonDisabled]}
+              onPress={testN8NConnection}
               disabled={loading}
             >
-              <Text style={styles.clearButtonIcon}>🗑️</Text>
-            </TouchableOpacity>
-          )}
-
-          <View style={styles.logo}>
-            <Image
-              source={require("../../assets/images/roary-logo.png")}
-              style={styles.logoImage}
-            />
-          </View>
-
-          <Text style={[styles.title, themeStyles.text]}>Roary</Text>
-          <Text style={[styles.subtitle, themeStyles.subtitleText]}>
-            How can I help you today?
-          </Text>
-
-          {/* Test N8N Button - show different text based on state */}
-          <TouchableOpacity
-            style={[styles.testButton, loading && styles.testButtonDisabled]}
-            onPress={testN8NConnection}
-            disabled={loading}
-          >
-            <Text style={styles.testButtonText}>
-              {loading ? "Testing..." : "Test N8N Connection"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Messages Section - Show when there are messages */}
-        {messages.length > 0 && (
-          <View style={styles.messagesContainer}>
-            <ScrollView
-              style={styles.messagesList}
-              showsVerticalScrollIndicator={false}
-            >
-              {messages.map((message) => (
-                <View
-                  key={message.id}
-                  style={[
-                    styles.messageBubble,
-                    message.isUser ? styles.userBubble : styles.aiBubble,
-                  ]}
-                >
-                  {message.isUser ? (
-                    <Text style={[styles.messageText, styles.userText]}>
-                      {message.text}
-                    </Text>
-                  ) : (
-                    <Markdown style={markdownStyles}>{message.text}</Markdown>
-                  )}
-                  <Text
-                    style={[
-                      styles.timestamp,
-                      message.isUser
-                        ? styles.userTimestamp
-                        : themeStyles.subtitleText,
-                    ]}
-                  >
-                    {message.timestamp.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </Text>
-                </View>
-              ))}
-              {loading && (
-                <View style={styles.loadingContainer}>
-                  <Text style={[styles.loadingText, themeStyles.subtitleText]}>
-                    Roary is thinking...
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Suggested Prompts Section - Show when no messages */}
-        {messages.length === 0 && (
-          <View style={styles.suggestionsContainer}>
-            <Text style={[styles.sectionTitle, themeStyles.subtitleText]}>
-              ✨ Suggested
-            </Text>
-
-            <View style={styles.promptsGrid}>
-              {SUGGESTED_PROMPTS.map((prompt) => (
-                <TouchableOpacity
-                  key={prompt.id}
-                  style={[
-                    styles.promptCard,
-                    themeStyles.card,
-                    loading && styles.promptCardDisabled,
-                  ]}
-                  onPress={() => handlePromptPress(prompt)}
-                  activeOpacity={0.7}
-                  disabled={loading}
-                >
-                  <Text style={[styles.promptTitle, themeStyles.text]}>
-                    {prompt.title}
-                  </Text>
-                  <Text
-                    style={[styles.promptSubtitle, themeStyles.subtitleText]}
-                  >
-                    {prompt.subtitle}
-                  </Text>
-
-                  <View style={styles.promptIcon}>
-                    <Text style={[styles.arrowIcon, themeStyles.subtitleText]}>
-                      ↗
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Input Section - Fixed at bottom */}
-      <View style={[styles.inputContainer, themeStyles.card]}>
-        <View style={[styles.inputWrapper, themeStyles.input]}>
-          <TextInput
-            style={[styles.textInput, themeStyles.input]}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Send a Message"
-            placeholderTextColor={isDark ? "#666666" : "#999999"}
-            multiline
-            editable={!loading}
-          />
-
-          <View style={styles.inputIcons}>
-            <TouchableOpacity
-              style={[styles.iconButton, loading && styles.sendButtonDisabled]}
-              onPress={handleSendMessage}
-              disabled={loading || !inputText.trim()}
-            >
-              <Text style={[styles.icon, themeStyles.subtitleText]}>
-                {loading ? "..." : "↑"}
+              <Text style={styles.testButtonText}>
+                {loading ? "Testing..." : "Test N8N Connection"}
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
 
-        <Text style={[styles.disclaimer, themeStyles.subtitleText]}>
-          LLMs can make mistakes. Verify important information.
-        </Text>
-      </View>
+          {/* Messages Section - Show when there are messages */}
+          {messages.length > 0 && (
+            <View style={styles.messagesContainer}>
+              <ScrollView
+                style={styles.messagesList}
+                showsVerticalScrollIndicator={false}
+              >
+                {messages.map((message) => (
+                  <View
+                    key={message.id}
+                    style={[
+                      styles.messageBubble,
+                      message.isUser ? styles.userBubble : styles.aiBubble,
+                    ]}
+                  >
+                    {message.isUser ? (
+                      <Text style={[styles.messageText, styles.userText]}>
+                        {message.text}
+                      </Text>
+                    ) : (
+                      <Markdown style={markdownStyles}>{message.text}</Markdown>
+                    )}
+                    <Text
+                      style={[
+                        styles.timestamp,
+                        message.isUser
+                          ? styles.userTimestamp
+                          : styles.aiTimestamp, // Fixed: specific style for AI timestamps
+                      ]}
+                    >
+                      {message.timestamp.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </Text>
+                  </View>
+                ))}
+                {loading && (
+                  <View style={styles.loadingContainer}>
+                    <Text
+                      style={[styles.loadingText, themeStyles.subtitleText]}
+                    >
+                      Roary is thinking...
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Suggested Prompts Section - Show when no messages */}
+          {messages.length === 0 && (
+            <View style={styles.suggestionsContainer}>
+              <Text style={[styles.sectionTitle, themeStyles.subtitleText]}>
+                ✨ Suggested
+              </Text>
+
+              <View style={styles.promptsGrid}>
+                {SUGGESTED_PROMPTS.map((prompt) => (
+                  <TouchableOpacity
+                    key={prompt.id}
+                    style={[
+                      styles.promptCard,
+                      themeStyles.card,
+                      loading && styles.promptCardDisabled,
+                    ]}
+                    onPress={() => handlePromptPress(prompt)}
+                    activeOpacity={0.7}
+                    disabled={loading}
+                  >
+                    <Text style={[styles.promptTitle, themeStyles.text]}>
+                      {prompt.title}
+                    </Text>
+                    <Text
+                      style={[styles.promptSubtitle, themeStyles.subtitleText]}
+                    >
+                      {prompt.subtitle}
+                    </Text>
+
+                    <View style={styles.promptIcon}>
+                      <Text
+                        style={[styles.arrowIcon, themeStyles.subtitleText]}
+                      >
+                        ↗
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Input Section - Now outside ScrollView but inside KeyboardAvoidingView */}
+        <View style={[styles.inputContainer, themeStyles.card]}>
+          <View style={[styles.inputWrapper, themeStyles.input]}>
+            <TextInput
+              style={[styles.textInput, themeStyles.input]}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Send a Message"
+              placeholderTextColor={isDark ? "#666666" : "#999999"}
+              multiline
+              editable={!loading}
+            />
+
+            <View style={styles.inputIcons}>
+              <TouchableOpacity
+                style={[
+                  styles.iconButton,
+                  loading && styles.sendButtonDisabled,
+                ]}
+                onPress={handleSendMessage}
+                disabled={loading || !inputText.trim()}
+              >
+                <Text style={[styles.icon, themeStyles.subtitleText]}>
+                  {loading ? "..." : "↑"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Hide disclaimer when keyboard is visible */}
+          {!isKeyboardVisible && (
+            <Text style={[styles.disclaimer, themeStyles.subtitleText]}>
+              LLMs can make mistakes. Verify important information.
+            </Text>
+          )}
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -446,9 +483,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 20,
+    paddingBottom: 120, // Add padding to account for input area
   },
 
   // Header Styles
@@ -520,7 +561,7 @@ const styles = StyleSheet.create({
   // Messages
   messagesContainer: {
     flex: 1,
-    paddingBottom: 100,
+    paddingBottom: 20, // Reduced from 100
   },
   messagesList: {
     flex: 1,
@@ -543,7 +584,7 @@ const styles = StyleSheet.create({
   },
   aiBubble: {
     alignSelf: "flex-start",
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#f0f0f0", // Keep light gray background
     marginRight: 60,
   },
   messageText: {
@@ -560,6 +601,9 @@ const styles = StyleSheet.create({
   },
   userTimestamp: {
     color: "rgba(255, 255, 255, 0.7)",
+  },
+  aiTimestamp: {
+    color: "rgba(0, 0, 0, 0.6)", // Dark timestamp for AI messages (on light background)
   },
   loadingContainer: {
     alignItems: "center",
@@ -615,16 +659,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  // Input
+  // Input - Updated for keyboard handling
   inputContainer: {
     padding: 16,
-    borderRadius: 30,
-    borderTopWidth: 0,
-    paddingBottom: 30,
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+    paddingTop: 16,
+    paddingBottom: 30, // Add safe area bottom padding
     backgroundColor: "transparent",
   },
   inputWrapper: {

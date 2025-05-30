@@ -1,5 +1,5 @@
 // src/screens/RoaryChatScreen.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -14,7 +14,6 @@ import {
   Image,
   Alert,
   Platform,
-  Keyboard,
 } from "react-native";
 import Markdown from "react-native-markdown-display";
 import { n8nService } from "../services/n8nServices";
@@ -27,25 +26,25 @@ const SUGGESTED_PROMPTS = [
     id: 1,
     title: "Important Dates",
     subtitle: "When does fall start?",
-    workflowId: "roary-chat",
+    workflowId: "important-dates",
   },
   {
     id: 2,
     title: "Prospective Students",
     subtitle: "What is the application deadline?",
-    workflowId: "roary-chat",
+    workflowId: "prospective-students",
   },
   {
     id: 3,
     title: "Alumni",
     subtitle: "How do I get in touch with my old classmates?",
-    workflowId: "roary-chat",
+    workflowId: "alumni-services",
   },
   {
     id: 4,
     title: "Security Tips",
     subtitle: "How can I browse safely?",
-    workflowId: "roary-chat",
+    workflowId: "security-tips",
   },
 ];
 
@@ -55,30 +54,9 @@ export const RoaryChatScreen: React.FC = () => {
     Array<{ id: string; text: string; isUser: boolean; timestamp: Date }>
   >([]);
   const [loading, setLoading] = useState(false);
-  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
-
-  // Keyboard listeners
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      () => {
-        setKeyboardVisible(true);
-      }
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      "keyboardDidHide",
-      () => {
-        setKeyboardVisible(false);
-      }
-    );
-
-    return () => {
-      keyboardDidHideListener?.remove();
-      keyboardDidShowListener?.remove();
-    };
-  }, []);
 
   // Dynamic styles based on theme
   const themeStyles = {
@@ -188,8 +166,13 @@ export const RoaryChatScreen: React.FC = () => {
     setLoading(true);
 
     try {
-      // Use the same method as regular chat messages
-      const response = await n8nService.sendChatMessage(message);
+      // Try GET method first for specific workflows
+      const response = await n8nService.executeTask(
+        "prompt",
+        { prompt: prompt.subtitle },
+        prompt.workflowId,
+        "GET"
+      );
 
       if (response.success) {
         // Extract the actual AI response
@@ -467,12 +450,9 @@ export const RoaryChatScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Hide disclaimer when keyboard is visible */}
-          {!isKeyboardVisible && (
-            <Text style={[styles.disclaimer, themeStyles.subtitleText]}>
-              LLMs can make mistakes. Verify important information.
-            </Text>
-          )}
+          <Text style={[styles.disclaimer, themeStyles.subtitleText]}>
+            LLMs can make mistakes. Verify important information.
+          </Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -673,7 +653,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    marginBottom: 8,
+    marginBottom: 8, // Reduced from 16 since disclaimer might be hidden
     minHeight: 48,
   },
   textInput: {

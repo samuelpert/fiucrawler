@@ -276,9 +276,11 @@ export const RoaryChatScreen: React.FC = () => {
             </View>
 
             <Text style={[styles.title, themeStyles.text]}>Roary</Text>
-            <Text style={[styles.subtitle, themeStyles.subtitleText]}>
-              How can I help you today?
-            </Text>
+            {messages.length === 0 && (
+              <Text style={[styles.subtitle, themeStyles.subtitleText]}>
+                How can I help you today?
+              </Text>
+            )}
           </View>
 
           {/* Messages Section - Show when there are messages */}

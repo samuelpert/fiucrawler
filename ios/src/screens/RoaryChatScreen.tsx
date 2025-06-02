@@ -72,10 +72,10 @@ export const RoaryChatScreen: React.FC = () => {
       backgroundColor: isDark ? "#1a1a1a" : "#ffffff",
     },
     text: {
-      color: "#091f3f", // Update to always use FIU blue
+      color: isDark ? "#ffffff" : "#091f3f", // Update to always use FIU blue
     },
     subtitleText: {
-      color: "#091f3f", // Update to always use FIU blue
+      color: isDark ? "#ffffff" : "#091f3f", // Update to always use FIU blue
     },
     card: {
       backgroundColor: isDark ? "#2a2a2a" : "#f5f5f5",
@@ -87,10 +87,22 @@ export const RoaryChatScreen: React.FC = () => {
       borderColor: isDark ? "#3a3a3a" : "#e0e0e0",
     },
     sendButton: {
-      backgroundColor: isDark ? "#ffffff" : "#091f3f", // Light bg in dark mode, dark bg in light mode
+      backgroundColor: isDark ? "#B6862C" : "#091f3f", // Light bg in dark mode, dark bg in light mode
     },
     sendButtonText: {
-      color: isDark ? "#000000" : "#ffffff", // White in dark mode, black in light mode
+      color: isDark ? "#ffffff" : "#ffffff", // White in both dark and light mode
+    },
+    userBubble: {
+      backgroundColor: isDark ? "#B6862C" : "#091f3f",
+    },
+    aiBubble: {
+      backgroundColor: isDark ? "#2a2a2a" : "#f2f2f7",
+    },
+    userText: {
+      color: isDark ? "#ffffff" : "#ffffff",
+    },
+    timestamp: {
+      color: isDark ? "rgba(255, 255, 255, 0.7)" : "rgba(255, 255, 255, 0.7)",
     },
   };
 
@@ -99,37 +111,37 @@ export const RoaryChatScreen: React.FC = () => {
     body: {
       fontSize: 16,
       lineHeight: 22,
-      color: "#000000", // Always black text for AI messages
+      color: isDark ? "#ffffff" : "#000000", // White in dark mode, black in light mode
     },
     heading1: {
       fontSize: 24,
       fontWeight: "bold" as "bold",
       marginBottom: 8,
-      color: "#000000", // Always black text
+      color: isDark ? "#ffffff" : "#000000", // White in dark mode, black in light mode
     },
     heading2: {
       fontSize: 20,
       fontWeight: "bold" as "bold",
       marginBottom: 6,
-      color: "#000000", // Always black text
+      color: isDark ? "#ffffff" : "#000000", // White in dark mode, black in light mode
     },
     heading3: {
       fontSize: 18,
       fontWeight: "bold" as "bold",
       marginBottom: 4,
-      color: "#000000", // Always black text
+      color: isDark ? "#ffffff" : "#000000", // White in dark mode, black in light mode
     },
     strong: {
       fontWeight: "bold" as "bold",
-      color: "#000000",
+      color: isDark ? "#ffffff" : "#000000", // White in dark mode, black in light mode
     },
     link: {
-      color: "#007AFF", // Standard link blue
+      color: isDark ? "#007AFF" : "#007AFF",
       textDecorationLine: "underline" as "underline",
     },
     list_item: {
       marginBottom: 4,
-      color: "#000000", // Always black text for list items
+      color: isDark ? "#ffffff" : "#000000", // White in dark mode, black in light mode
     },
     bullet_list: {
       marginBottom: 8,
@@ -271,7 +283,7 @@ export const RoaryChatScreen: React.FC = () => {
                   xml={trashIconXml}
                   width={24}
                   height={24}
-                  fill={isDark ? "#091f3f" : "#091f3f"}
+                  fill={isDark ? "#B6862C" : "#091f3f"}
                 />
               </TouchableOpacity>
             )}
@@ -303,11 +315,19 @@ export const RoaryChatScreen: React.FC = () => {
                     key={message.id}
                     style={[
                       styles.messageBubble,
-                      message.isUser ? styles.userBubble : styles.aiBubble,
+                      message.isUser
+                        ? [styles.userBubble, themeStyles.userBubble]
+                        : [styles.aiBubble, themeStyles.aiBubble],
                     ]}
                   >
                     {message.isUser ? (
-                      <Text style={[styles.messageText, styles.userText]}>
+                      <Text
+                        style={[
+                          styles.messageText,
+                          styles.userText,
+                          themeStyles.userText,
+                        ]}
+                      >
                         {message.text}
                       </Text>
                     ) : (
@@ -318,7 +338,7 @@ export const RoaryChatScreen: React.FC = () => {
                         styles.timestamp,
                         message.isUser
                           ? styles.userTimestamp
-                          : styles.aiTimestamp, // Fixed: specific style for AI timestamps
+                          : themeStyles.timestamp,
                       ]}
                     >
                       {message.timestamp.toLocaleTimeString([], {
@@ -497,7 +517,6 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 12,
     borderRadius: 20,
-
     zIndex: 1,
   },
 
@@ -522,7 +541,6 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     alignSelf: "flex-end",
-    backgroundColor: "#091f3f",
     marginLeft: 60,
   },
   aiBubble: {
@@ -544,9 +562,6 @@ const styles = StyleSheet.create({
   },
   userTimestamp: {
     color: "rgba(255, 255, 255, 0.7)",
-  },
-  aiTimestamp: {
-    color: "rgba(0, 0, 0, 0.6)", // Dark timestamp for AI messages (on light background)
   },
   loadingContainer: {
     alignItems: "center",

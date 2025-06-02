@@ -16,6 +16,7 @@ import {
   Platform,
 } from "react-native";
 import Markdown from "react-native-markdown-display";
+import { SvgXml } from "react-native-svg";
 import { n8nService } from "../services/n8nServices";
 
 const { width } = Dimensions.get("window");
@@ -48,6 +49,13 @@ const SUGGESTED_PROMPTS = [
   },
 ];
 
+// Add the SVG content as a string constant
+const trashIconXml = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+</svg>
+`;
+
 export const RoaryChatScreen: React.FC = () => {
   const [inputText, setInputText] = useState("");
   const [messages, setMessages] = useState<
@@ -64,10 +72,10 @@ export const RoaryChatScreen: React.FC = () => {
       backgroundColor: isDark ? "#1a1a1a" : "#ffffff",
     },
     text: {
-      color: isDark ? "#ffffff" : "#000000",
+      color: "#091f3f", // Update to always use FIU blue
     },
     subtitleText: {
-      color: isDark ? "#a0a0a0" : "#666666",
+      color: "#091f3f", // Update to always use FIU blue
     },
     card: {
       backgroundColor: isDark ? "#2a2a2a" : "#f5f5f5",
@@ -107,7 +115,7 @@ export const RoaryChatScreen: React.FC = () => {
     },
     strong: {
       fontWeight: "bold" as "bold",
-      color: "#000000", // Always black text for bold
+      color: "#000000",
     },
     link: {
       color: "#007AFF", // Standard link blue
@@ -233,13 +241,6 @@ export const RoaryChatScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, themeStyles.container]}>
-      {/* Background Image */}
-      <Image
-        source={require("../../assets/images/fiu-motto.png")}
-        style={styles.backgroundImage}
-        resizeMode="contain"
-      />
-
       <KeyboardAvoidingView
         style={styles.keyboardAvoidingView}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -258,7 +259,12 @@ export const RoaryChatScreen: React.FC = () => {
                 onPress={clearChat}
                 disabled={loading}
               >
-                <Text style={styles.clearButtonIcon}>🗑️</Text>
+                <SvgXml
+                  xml={trashIconXml}
+                  width={24}
+                  height={24}
+                  fill={isDark ? "#091f3f" : "#091f3f"}
+                />
               </TouchableOpacity>
             )}
 
@@ -329,7 +335,7 @@ export const RoaryChatScreen: React.FC = () => {
           {messages.length === 0 && (
             <View style={styles.suggestionsContainer}>
               <Text style={[styles.sectionTitle, themeStyles.subtitleText]}>
-                ✨ Suggested
+                Suggested Topics
               </Text>
 
               <View style={styles.promptsGrid}>
@@ -445,7 +451,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "rgba(255, 165, 0, 0.2)",
+    backgroundColor: "#f2f2f7",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
@@ -462,6 +468,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: "bold",
     marginBottom: 8,
+    color: "#091f3f",
   },
   subtitle: {
     fontSize: 18,
@@ -475,12 +482,8 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 12,
     borderRadius: 20,
-    backgroundColor: "rgba(255, 0, 0, 0.1)",
+
     zIndex: 1,
-  },
-  clearButtonIcon: {
-    fontSize: 15,
-    color: "#ff4444",
   },
 
   // Messages
@@ -504,12 +507,12 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     alignSelf: "flex-end",
-    backgroundColor: "#007AFF",
+    backgroundColor: "#091f3f",
     marginLeft: 60,
   },
   aiBubble: {
     alignSelf: "flex-start",
-    backgroundColor: "#f0f0f0", // Keep light gray background
+    backgroundColor: "#f2f2f7", // Keep light gray background
     marginRight: 60,
   },
   messageText: {

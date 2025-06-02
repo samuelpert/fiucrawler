@@ -15,10 +15,33 @@ export interface N8NWorkflowConfig {
 
 class N8NService {
   private baseUrl: string;
+  private currentSessionId: string | null = null; // Add session tracking
+
 
   constructor() {
     this.baseUrl = N8N_BASE_URL;
   }
+
+  // Generate a unique session ID for the conversation
+  private generateSessionId(): string {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  // Get or create session ID
+  private getSessionId(): string {
+    if (!this.currentSessionId) {
+      this.currentSessionId = this.generateSessionId();
+      console.log('Generated new session ID:', this.currentSessionId);
+    }
+    return this.currentSessionId;
+  }
+
+  // Clear session (call this when clearing chat)
+  public clearSession(): void {
+    this.currentSessionId = null;
+    console.log('Session cleared');
+  }
+  
 
   /**
    * Call a specific N8N webhook workflow with proper query params
@@ -139,10 +162,12 @@ class N8NService {
     message: string,
     workflowId: string = "roary-chat"
   ): Promise<N8NResponse> {
-    // Send as POST request with chatInput field for AI Agent
+    const sessionId = this.getSessionId();
+    
     return this.callWorkflow(workflowId, {
-      chatInput: message,  // AI Agent expects this field name
-      message,             // Keep original for compatibility
+      chatInput: message,
+      message,
+      sessionId: sessionId,  // Add this line
       timestamp: new Date().toISOString(),
       type: "chat"
     }, "POST");

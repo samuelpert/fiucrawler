@@ -44,7 +44,7 @@ const SUGGESTED_PROMPTS = [
   {
     id: 4,
     title: "Security Tips",
-    subtitle: "How can I browse safely?",
+    subtitle: "Why is necessary to use DUO mobile app?",
     workflowId: "roary-chat",
   },
 ];
@@ -85,6 +85,12 @@ export const RoaryChatScreen: React.FC = () => {
       backgroundColor: isDark ? "#2a2a2a" : "#f8f8f8",
       color: isDark ? "#ffffff" : "#000000",
       borderColor: isDark ? "#3a3a3a" : "#e0e0e0",
+    },
+    sendButton: {
+      backgroundColor: isDark ? "#ffffff" : "#091f3f", // Light bg in dark mode, dark bg in light mode
+    },
+    sendButtonText: {
+      color: isDark ? "#000000" : "#ffffff", // White in dark mode, black in light mode
     },
   };
 
@@ -144,6 +150,7 @@ export const RoaryChatScreen: React.FC = () => {
   };
 
   // Clear Chat function with confirmation dialog
+  // Update your clearChat function
   const clearChat = () => {
     Alert.alert(
       "Clear Chat",
@@ -158,7 +165,8 @@ export const RoaryChatScreen: React.FC = () => {
           style: "destructive",
           onPress: () => {
             setMessages([]);
-            console.log("Chat cleared");
+            n8nService.clearSession(); // Add this line
+            console.log("Chat and session cleared");
           },
         },
       ]
@@ -392,14 +400,19 @@ export const RoaryChatScreen: React.FC = () => {
             <View style={styles.inputIcons}>
               <TouchableOpacity
                 style={[
-                  styles.iconButton,
+                  styles.sendButton, // ← New circular button style
+                  themeStyles.sendButton, // ← Theme-aware background
                   loading && styles.sendButtonDisabled,
                 ]}
                 onPress={handleSendMessage}
                 disabled={loading || !inputText.trim()}
               >
-                <Text style={[styles.icon, themeStyles.subtitleText]}>
-                  {loading ? "..." : "↑"}
+                <Text
+                  style={[styles.sendButtonIcon, themeStyles.sendButtonText]}
+                >
+                  {" "}
+                  {/* ← New icon style */}
+                  {loading ? "..." : "↑ "}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -567,7 +580,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-    opacity: 0.6,
+    opacity: 0.7,
   },
   promptCardDisabled: {
     opacity: 0.3,
@@ -620,9 +633,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginLeft: 8,
   },
-  iconButton: {
-    padding: 8,
-    marginLeft: 4,
+  sendButton: {
+    width: 36, // Slightly larger
+    height: 36,
+    borderRadius: 18, // Half of width/height for perfect circle
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
+    shadowColor: "#000", // Add subtle shadow
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2, // For Android shadow
+  },
+  sendButtonIcon: {
+    fontSize: 16,
+    fontWeight: "bold",
   },
   sendButtonDisabled: {
     opacity: 0.5,

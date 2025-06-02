@@ -1,5 +1,5 @@
 // src/services/n8nService.ts
-const N8N_BASE_URL = "http://10.108.110.228:5678";
+const N8N_BASE_URL = "http://localhost:5678";
 
 export interface N8NResponse {
   success: boolean;
@@ -135,11 +135,6 @@ class N8NService {
       };
     }
   }
-
-  /**
-   * Send a chat message to N8N workflow
-   * Uses POST method with chatInput field that AI Agent expects
-   */
   async sendChatMessage(
     message: string,
     workflowId: string = "roary-chat"
@@ -153,23 +148,10 @@ class N8NService {
     }, "POST");
   }
 
-  /**
-   * Send a chat message using POST method (alternative)
-   */
-  async sendChatMessagePOST(
-    message: string,
-    workflowId: string = "roary-chat"
-  ): Promise<N8NResponse> {
-    return this.callWorkflow(workflowId, {
-      message,
-      timestamp: new Date().toISOString(),
-      type: "chat"
-    }, "POST");
-  }
+  
 
-  /**
-   * Execute a specific task workflow
-   */
+
+  // Execute a specific task workflow
   async executeTask(
     taskType: string,
     parameters: any,

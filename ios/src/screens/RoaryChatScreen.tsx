@@ -26,25 +26,25 @@ const SUGGESTED_PROMPTS = [
     id: 1,
     title: "Important Dates",
     subtitle: "When does fall start?",
-    workflowId: "important-dates",
+    workflowId: "roary-chat",
   },
   {
     id: 2,
     title: "Prospective Students",
     subtitle: "What is the application deadline?",
-    workflowId: "prospective-students",
+    workflowId: "roary-chat",
   },
   {
     id: 3,
     title: "Alumni",
     subtitle: "How do I get in touch with my old classmates?",
-    workflowId: "alumni-services",
+    workflowId: "roary-chat",
   },
   {
     id: 4,
     title: "Security Tips",
     subtitle: "How can I browse safely?",
-    workflowId: "security-tips",
+    workflowId: "roary-chat",
   },
 ];
 
@@ -166,24 +166,20 @@ export const RoaryChatScreen: React.FC = () => {
     setLoading(true);
 
     try {
-      // Try GET method first for specific workflows
-      const response = await n8nService.executeTask(
-        "prompt",
-        { prompt: prompt.subtitle },
-        prompt.workflowId,
-        "GET"
+      const response = await n8nService.sendChatMessage(
+        message,
+        prompt.workflowId
       );
 
       if (response.success) {
         // Extract the actual AI response
         let aiMessage = response.message || "No response from AI";
 
-        // Log the full response for debugging
         console.log("Full N8N Response:", response);
         console.log("AI Message:", aiMessage);
 
         addMessage(aiMessage, false);
-        setInputText(""); // Clear input
+        setInputText("");
       } else {
         addMessage(`Error: ${response.error || "Something went wrong"}`, false);
       }
@@ -209,7 +205,7 @@ export const RoaryChatScreen: React.FC = () => {
 
       if (!response.success) {
         console.log("GET failed, trying POST method...");
-        response = await n8nService.sendChatMessagePOST(messageText);
+        response = await n8nService.sendChatMessage(messageText);
       }
 
       if (response.success) {

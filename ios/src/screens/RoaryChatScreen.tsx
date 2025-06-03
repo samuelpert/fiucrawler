@@ -108,6 +108,14 @@ export const RoaryChatScreen: React.FC = () => {
     logo: {
       backgroundColor: isDark ? "#2a2a2a" : "#f2f2f7",
     },
+    // Dark mode shadow adjustments
+    shadowColor: isDark ? "#ffffff" : "#000000",
+    shadowOpacity: isDark ? 0.1 : 0.15,
+    promptShadowOpacity: isDark ? 0.08 : 0.12,
+    borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.05)",
+    promptBorderColor: isDark
+      ? "rgba(255, 255, 255, 0.15)"
+      : "rgba(0, 0, 0, 0.08)",
   };
 
   // Markdown styles for AI messages - Fixed with black text for light AI bubbles
@@ -319,8 +327,20 @@ export const RoaryChatScreen: React.FC = () => {
                     key={message.id}
                     style={[
                       styles.messageBubble,
+                      {
+                        shadowColor: themeStyles.shadowColor,
+                        shadowOpacity: themeStyles.shadowOpacity,
+                        borderColor: themeStyles.borderColor,
+                      },
                       message.isUser
-                        ? [styles.userBubble, themeStyles.userBubble]
+                        ? [
+                            styles.userBubble,
+                            themeStyles.userBubble,
+                            {
+                              shadowColor: isDark ? "#B6862C" : "#091f3f",
+                              shadowOpacity: isDark ? 0.3 : 0.2,
+                            },
+                          ]
                         : [styles.aiBubble, themeStyles.aiBubble],
                     ]}
                   >
@@ -384,6 +404,11 @@ export const RoaryChatScreen: React.FC = () => {
                     style={[
                       styles.promptCard,
                       themeStyles.card,
+                      {
+                        shadowColor: themeStyles.shadowColor,
+                        shadowOpacity: themeStyles.promptShadowOpacity,
+                        borderColor: themeStyles.promptBorderColor,
+                      },
                       loading && styles.promptCardDisabled,
                     ]}
                     onPress={() => handlePromptPress(prompt)}
@@ -535,7 +560,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
 
-  // Messages
+  // Messages - ENHANCED WITH ELEVATION
   messagesContainer: {
     flex: 1,
     paddingBottom: 20, // Reduced from 100
@@ -548,20 +573,36 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 18,
     marginVertical: 10,
+    // Enhanced shadow for elevation (base values - overridden by theme)
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 8,
+    // Subtle border for extra definition (overridden by theme)
+    borderWidth: 0.5,
+    borderColor: "rgba(0, 0, 0, 0.05)",
   },
   userBubble: {
     alignSelf: "flex-end",
     marginLeft: 60,
+    // Slightly different shadow for user messages (base values)
+    shadowColor: "#091f3f",
+    shadowOffset: { width: -1, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 6,
   },
   aiBubble: {
     alignSelf: "flex-start",
     backgroundColor: "#f2f2f7", // Keep light gray background
     marginRight: 60,
+    // Standard shadow for AI messages
+    shadowColor: "#000",
+    shadowOffset: { width: 1, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 6,
   },
   messageText: {
     fontSize: 16,
@@ -590,7 +631,7 @@ const styles = StyleSheet.create({
     height: 80, // Reduced from 120 to make it smaller
   },
 
-  // Suggestions
+  // Suggestions - ENHANCED WITH ELEVATION
   suggestionsContainer: {
     flex: 1,
     paddingBottom: 20,
@@ -609,11 +650,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     position: "relative",
+    // Enhanced shadow for cards (base values - overridden by theme)
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 6,
+    // Subtle border enhancement (overridden by theme)
+    borderColor: "rgba(0, 0, 0, 0.08)",
     opacity: 0.7,
   },
   promptCardDisabled: {
@@ -637,7 +681,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  // Input - Updated for keyboard handling
+  // Input - ENHANCED WITH ELEVATION
   inputContainer: {
     padding: 16,
     paddingTop: 16,
@@ -674,11 +718,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 8,
-    shadowColor: "#000", // Add subtle shadow
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2, // For Android shadow
   },
   sendButtonIcon: {
     fontSize: 16,

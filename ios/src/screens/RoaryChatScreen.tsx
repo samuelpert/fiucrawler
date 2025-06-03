@@ -73,10 +73,10 @@ export const RoaryChatScreen: React.FC = () => {
       backgroundColor: isDark ? "#1a1a1a" : "#ffffff",
     },
     text: {
-      color: isDark ? "#ffffff" : "#091f3f", // Update to always use FIU blue
+      color: isDark ? "#ffffff" : "#091f3f",
     },
     subtitleText: {
-      color: isDark ? "#ffffff" : "#091f3f", // Update to always use FIU blue
+      color: isDark ? "#ffffff" : "#091f3f",
     },
     card: {
       backgroundColor: isDark ? "#2a2a2a" : "#f5f5f5",
@@ -88,10 +88,10 @@ export const RoaryChatScreen: React.FC = () => {
       borderColor: isDark ? "#3a3a3a" : "#e0e0e0",
     },
     sendButton: {
-      backgroundColor: isDark ? "#B6862C" : "#091f3f", // Light bg in dark mode, dark bg in light mode
+      backgroundColor: isDark ? "#B6862C" : "#091f3f",
     },
     sendButtonText: {
-      color: isDark ? "#ffffff" : "#ffffff", // White in both dark and light mode
+      color: isDark ? "#ffffff" : "#ffffff",
     },
     userBubble: {
       backgroundColor: isDark ? "#B6862C" : "#091f3f",
@@ -104,6 +104,9 @@ export const RoaryChatScreen: React.FC = () => {
     },
     timestamp: {
       color: isDark ? "rgba(255, 255, 255, 0.7)" : "rgba(255, 255, 255, 0.7)",
+    },
+    logo: {
+      backgroundColor: isDark ? "#2a2a2a" : "#f2f2f7",
     },
   };
 
@@ -282,14 +285,14 @@ export const RoaryChatScreen: React.FC = () => {
               >
                 <SvgXml
                   xml={trashIconXml}
-                  width={24}
-                  height={24}
-                  fill={isDark ? "#B6862C" : "#091f3f"}
+                  width={30}
+                  height={30}
+                  fill={isDark ? "#ffffff" : "#000000"}
                 />
               </TouchableOpacity>
             )}
 
-            <View style={styles.logo}>
+            <View style={[styles.logo, themeStyles.logo]}>
               <Image
                 source={require("../../assets/images/roary-logo.png")}
                 style={styles.logoImage}
@@ -428,7 +431,7 @@ export const RoaryChatScreen: React.FC = () => {
                 style={[
                   styles.sendButton,
                   themeStyles.sendButton,
-                  loading && styles.sendButtonDisabled,
+                  (loading || !inputText.trim()) && styles.sendButtonDisabled,
                 ]}
                 onPress={handleSendMessage}
                 disabled={loading || !inputText.trim()}
@@ -493,13 +496,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 60,
     paddingBottom: 40,
-    position: "relative", // Added for absolute positioning of clear button
+    position: "relative",
   },
   logo: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "#f2f2f7",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
@@ -563,7 +565,7 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   userText: {
     color: "#fff",

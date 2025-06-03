@@ -432,7 +432,7 @@ export const RoaryChatScreen: React.FC = () => {
                 >
                   {" "}
                   {/* ← New icon style */}
-                  {loading ? "..." : "↑ "}
+                  {loading ? "... " : "↑ "}
                 </Text>
               </TouchableOpacity>
             </View>

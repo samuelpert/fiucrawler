@@ -18,6 +18,7 @@ import {
 import Markdown from "react-native-markdown-display";
 import { SvgXml } from "react-native-svg";
 import { n8nService } from "../services/n8nServices";
+import LottieView from "lottie-react-native";
 
 const { width } = Dimensions.get("window");
 
@@ -350,11 +351,12 @@ export const RoaryChatScreen: React.FC = () => {
                 ))}
                 {loading && (
                   <View style={styles.loadingContainer}>
-                    <Text
-                      style={[styles.loadingText, themeStyles.subtitleText]}
-                    >
-                      Roary is thinking...
-                    </Text>
+                    <LottieView
+                      source={require("../../assets/animations/navy-claw.json")}
+                      autoPlay
+                      loop
+                      style={styles.loadingAnimation}
+                    />
                   </View>
                 )}
               </ScrollView>
@@ -567,8 +569,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
   },
-  loadingText: {
-    fontStyle: "italic",
+  loadingAnimation: {
+    width: 100,
+    height: 100,
   },
 
   // Suggestions

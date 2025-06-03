@@ -352,7 +352,11 @@ export const RoaryChatScreen: React.FC = () => {
                 {loading && (
                   <View style={styles.loadingContainer}>
                     <LottieView
-                      source={require("../../assets/animations/navy-claw.json")}
+                      source={
+                        isDark
+                          ? require("../../assets/animations/gold-claw.json")
+                          : require("../../assets/animations/navy-claw.json")
+                      }
                       autoPlay
                       loop
                       style={styles.loadingAnimation}
@@ -422,20 +426,27 @@ export const RoaryChatScreen: React.FC = () => {
             <View style={styles.inputIcons}>
               <TouchableOpacity
                 style={[
-                  styles.sendButton, // ← New circular button style
-                  themeStyles.sendButton, // ← Theme-aware background
+                  styles.sendButton,
+                  themeStyles.sendButton,
                   loading && styles.sendButtonDisabled,
                 ]}
                 onPress={handleSendMessage}
                 disabled={loading || !inputText.trim()}
               >
-                <Text
-                  style={[styles.sendButtonIcon, themeStyles.sendButtonText]}
-                >
-                  {" "}
-                  {/* ← New icon style */}
-                  {loading ? "... " : "↑ "}
-                </Text>
+                {loading ? (
+                  <LottieView
+                    source={require("../../assets/animations/thinking-light.json")}
+                    autoPlay
+                    loop
+                    style={styles.sendButtonAnimation}
+                  />
+                ) : (
+                  <Text
+                    style={[styles.sendButtonIcon, themeStyles.sendButtonText]}
+                  >
+                    ↑
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -566,12 +577,15 @@ const styles = StyleSheet.create({
     color: "rgba(255, 255, 255, 0.7)",
   },
   loadingContainer: {
-    alignItems: "center",
+    alignItems: "flex-start", // Changed from 'center' to 'flex-start'
+    justifyContent: "center",
     padding: 16,
+    minHeight: 80, // Reduced from 120 to make it more compact
+    marginLeft: -20, // Changed from 10 to -10 to move it more to the left
   },
   loadingAnimation: {
-    width: 100,
-    height: 100,
+    width: 80, // Reduced from 120 to make it smaller
+    height: 80, // Reduced from 120 to make it smaller
   },
 
   // Suggestions
@@ -678,5 +692,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
     marginTop: 4,
+  },
+  // Add new style for the send button animation
+  sendButtonAnimation: {
+    width: 60,
+    height: 60,
   },
 });

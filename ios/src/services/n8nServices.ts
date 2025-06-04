@@ -1,5 +1,56 @@
 // src/services/n8nService.ts
-const N8N_BASE_URL = "http://localhost:5678";
+import { Platform } from 'react-native';
+
+// Environment configuration
+const N8N_CONFIG = {
+  // For iOS Simulator and Android Emulator
+  localhost: "http://localhost:5678",
+  
+  // For physical devices - UPDATE THIS WITH YOUR NGROK URL
+  ngrok: "https://9d37-131-94-186-11.ngrok-free.app",
+  
+  // For production (when you deploy N8N)
+  production: "https://your-production-n8n-url.com"
+};
+
+// Function to determine which URL to use
+const getN8NBaseUrl = (): string => {
+  // Check if we're in development mode
+  const isDevelopment = __DEV__;
+  
+  if (!isDevelopment) {
+    // Production mode
+    return N8N_CONFIG.production;
+  }
+  
+  // Development mode - detect device type
+  if (Platform.OS === 'ios') {
+    // For iOS: Check if it's simulator or physical device
+    // We can't directly detect this, so we'll try localhost first
+    // and fall back to ngrok if needed
+    return N8N_CONFIG.localhost;
+  } else if (Platform.OS === 'android') {
+    // For Android: Similar approach
+    return N8N_CONFIG.localhost;
+  } else {
+    // Web or other platforms
+    return N8N_CONFIG.localhost;
+  }
+};
+
+// Alternative: Manual override for testing
+const FORCE_USE_NGROK = true; // Set to true when testing on physical devices
+
+const getActiveN8NUrl = (): string => {
+  if (FORCE_USE_NGROK) {
+    console.log('🌐 Using ngrok URL for testing:', N8N_CONFIG.ngrok);
+    return N8N_CONFIG.ngrok;
+  }
+  
+  const url = getN8NBaseUrl();
+  console.log('🔗 Using N8N URL:', url);
+  return url;
+};
 
 export interface N8NResponse {
   success: boolean;
@@ -15,11 +66,29 @@ export interface N8NWorkflowConfig {
 
 class N8NService {
   private baseUrl: string;
-  private currentSessionId: string | null = null; // Add session tracking
-
+  private currentSessionId: string | null = null;
 
   constructor() {
-    this.baseUrl = N8N_BASE_URL;
+    this.baseUrl = getActiveN8NUrl();
+    console.log('🚀 N8NService initialized with URL:', this.baseUrl);
+  }
+
+  // Method to update the base URL (useful for testing)
+  public updateBaseUrl(url: string): void {
+    this.baseUrl = url;
+    console.log('🔄 N8N base URL updated to:', this.baseUrl);
+  }
+
+  // Method to switch to ngrok URL
+  public useNgrokUrl(): void {
+    this.baseUrl = N8N_CONFIG.ngrok;
+    console.log('🌐 Switched to ngrok URL:', this.baseUrl);
+  }
+
+  // Method to switch to localhost URL
+  public useLocalhostUrl(): void {
+    this.baseUrl = N8N_CONFIG.localhost;
+    console.log('🏠 Switched to localhost URL:', this.baseUrl);
   }
 
   // Generate a unique session ID for the conversation
@@ -41,7 +110,6 @@ class N8NService {
     this.currentSessionId = null;
     console.log('Session cleared');
   }
-  
 
   /**
    * Call a specific N8N webhook workflow with proper query params
@@ -53,12 +121,12 @@ class N8NService {
   ): Promise<N8NResponse> {
     try {
       console.log(
-        `Calling N8N webhook: ${webhookId} with method: ${method}`,
+        `🔗 Calling N8N webhook: ${webhookId} with method: ${method}`,
         payload
       );
 
       const url = `${this.baseUrl}/webhook/${webhookId}`;
-      console.log(`Full N8N webhook URL: ${url}`);
+      console.log(`📡 Full N8N webhook URL: ${url}`);
 
       const requestOptions: RequestInit = {
         method,
@@ -83,25 +151,31 @@ class N8NService {
         finalUrl = `${url}?${queryParams.toString()}`;
       }
 
-      console.log(`Making request to: ${finalUrl}`);
+      console.log(`📤 Making request to: ${finalUrl}`);
 
       const response = await fetch(finalUrl, requestOptions);
       const responseText = await response.text();
 
       if (!response.ok) {
         console.error(
-          `N8N webhook error! Status: ${response.status}, Response Text:`,
+          `❌ N8N webhook error! Status: ${response.status}, Response Text:`,
           responseText
         );
+        
+        // If localhost fails, suggest trying ngrok
+        if (this.baseUrl.includes('localhost') && response.status >= 500) {
+          console.log('💡 Localhost failed. Try switching to ngrok URL for physical device testing.');
+        }
+        
         throw new Error(
           `N8N webhook error! status: ${response.status}, message: ${responseText}`
         );
       }
 
-      console.log("Raw N8N webhook response text:", responseText);
+      console.log("✅ Raw N8N webhook response text:", responseText);
 
       if (!responseText) {
-        console.warn("N8N webhook returned an empty response.");
+        console.warn("⚠️ N8N webhook returned an empty response.");
         return { 
           success: true, 
           message: "Workflow executed successfully (empty response)" 
@@ -113,7 +187,7 @@ class N8NService {
         data = JSON.parse(responseText);
       } catch (parseError) {
         // If response isn't JSON, treat the text as the message
-        console.log("Response is not JSON, treating as plain text");
+        console.log("📝 Response is not JSON, treating as plain text");
         return {
           success: true,
           message: responseText,
@@ -139,8 +213,8 @@ class N8NService {
         aiResponse = data.result;
       }
 
-      console.log("Extracted AI response:", aiResponse);
-      console.log("Full n8n response data:", JSON.stringify(data, null, 2));
+      console.log("🤖 Extracted AI response:", aiResponse);
+      console.log("📊 Full n8n response data:", JSON.stringify(data, null, 2));
 
       return {
         success: true,
@@ -148,7 +222,23 @@ class N8NService {
         data: data,
       };
     } catch (error: any) {
-      console.error("N8N Workflow Error in callWorkflow:", error);
+      console.error("💥 N8N Workflow Error in callWorkflow:", error);
+      
+      // Enhanced error handling with suggestions
+      if (error.message?.includes('Network request failed') || 
+          error.message?.includes('ECONNREFUSED') ||
+          error.message?.includes('Failed to fetch')) {
+        
+        const suggestion = this.baseUrl.includes('localhost') 
+          ? "Try switching to ngrok URL for physical device testing, or ensure N8N is running on localhost:5678"
+          : "Check your internet connection and ensure the ngrok tunnel is active";
+          
+        return {
+          success: false,
+          error: `Connection failed: ${error.message}. ${suggestion}`
+        };
+      }
+      
       if (error.success === false && error.error) {
         return error;
       }
@@ -158,6 +248,7 @@ class N8NService {
       };
     }
   }
+
   async sendChatMessage(
     message: string,
     workflowId: string = "roary-chat"
@@ -167,14 +258,11 @@ class N8NService {
     return this.callWorkflow(workflowId, {
       chatInput: message,
       message,
-      sessionId: sessionId,  // Add this line
+      sessionId: sessionId,
       timestamp: new Date().toISOString(),
       type: "chat"
     }, "POST");
   }
-
-  
-
 
   // Execute a specific task workflow
   async executeTask(
@@ -204,7 +292,8 @@ class N8NService {
   async testConnection(
     testWorkflowId: string = "roary-chat"
   ): Promise<boolean> {
-    console.log(`Testing N8N connection with workflow: ${testWorkflowId}`);
+    console.log(`🧪 Testing N8N connection with workflow: ${testWorkflowId}`);
+    console.log(`🔗 Testing URL: ${this.baseUrl}`);
     
     try {
       // First try GET method
@@ -215,11 +304,11 @@ class N8NService {
       }, "GET");
       
       if (getResponse.success) {
-        console.log("GET method test successful:", getResponse);
+        console.log("✅ GET method test successful:", getResponse);
         return true;
       }
     } catch (error) {
-      console.log("GET method failed, trying POST...");
+      console.log("❌ GET method failed, trying POST...");
     }
 
     try {
@@ -230,10 +319,10 @@ class N8NService {
         test: true
       }, "POST");
       
-      console.log("POST method test response:", postResponse);
+      console.log("✅ POST method test response:", postResponse);
       return postResponse.success;
     } catch (error) {
-      console.error("Both GET and POST methods failed:", error);
+      console.error("❌ Both GET and POST methods failed:", error);
       return false;
     }
   }

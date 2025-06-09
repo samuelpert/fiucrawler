@@ -8,9 +8,10 @@ from langchain.embeddings.base  import Embeddings
 from langchain_community.vectorstores import Qdrant
 
 class OllamaEmbeddings(Embeddings):
-    def __init__(self, model: str = "nomic-embed-text", url: str = "http://localhost:11434/api/embeddings"):
+    def __init__(self, model: str = "nomic-embed-text", url: str = "http://localhost:11434/api/embeddings", dimensions: int = 512):
         self.model = model
         self.url = url
+        self.dimensions = dimensions
 
     def embed_documents(self, texts):
         return [self._embed(text) for text in texts]
@@ -46,7 +47,7 @@ vectorstore = Qdrant.from_documents(
     embedding       = embeddings,
     url             = os.getenv("QDRANT_URL"),
     api_key         = os.getenv("QDRANT_API_KEY"),
-    collection_name = "fiu_content3",
+    collection_name = "fiu_content",
     distance_func   = "Cosine",
     force_recreate  = True,
     batch_size      = 400,

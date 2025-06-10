@@ -1,18 +1,61 @@
 import os
+import re
+import yaml
 import requests
 from dotenv import load_dotenv
 import numpy as np
+from pathlib import Path
 
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.base import Embeddings
 from langchain_community.vectorstores import Qdrant
+from langchain.schema import Document
+
+class MarkdownWithMetadataLoader(TextLoader):
+    """Custom loader that extracts YAML frontmatter from markdown files"""
+    
+    def lazy_load(self):
+        """Load and parse markdown file with YAML frontmatter"""
+        with open(self.file_path, encoding=self.encoding) as f:
+            content = f.read()
+            
+        # Extract YAML frontmatter
+        metadata = {}
+        yaml_match = re.match(r'^---\n(.*?)\n---\n(.*)$', content, re.DOTALL)
+        
+        if yaml_match:
+            try:
+                # Parse YAML frontmatter
+                yaml_content = yaml_match.group(1)
+                metadata = yaml.safe_load(yaml_content) or {}
+                
+                # Get the content without frontmatter
+                text_content = yaml_match.group(2).strip()
+            except yaml.YAMLError as e:
+                print(f"Error parsing YAML in {self.file_path}: {e}")
+                text_content = content
+        else:
+            text_content = content
+        
+        # Add file information to metadata
+        metadata['source'] = str(self.file_path)
+        metadata['filename'] = os.path.basename(self.file_path)
+        
+        # Ensure all expected fields exist
+        metadata.setdefault('url', 'Unknown URL')
+        metadata.setdefault('site', 'Unknown Site')
+        metadata.setdefault('crawled_at', 'Unknown Date')
+        metadata.setdefault('title', 'Untitled')
+        
+        yield Document(
+            page_content=text_content,
+            metadata=metadata
+        )
 
 class OllamaMatryoshkaEmbeddings(Embeddings):
     """
     Ollama embeddings with Matryoshka truncation support.
-    Nomic-embed-text v1.5 supports Matryoshka embeddings, allowing truncation
-    to powers of 2 (512, 256, 128, 64) without retraining.
     """
     def __init__(self, 
                  model: str = "nomic-embed-text:v1.5", 
@@ -22,7 +65,6 @@ class OllamaMatryoshkaEmbeddings(Embeddings):
         self.url = url
         self.target_dim = target_dim
         
-        # Validate target dimension for Matryoshka
         valid_dims = [64, 128, 256, 512, 768]
         if target_dim not in valid_dims:
             raise ValueError(f"Target dimension must be one of {valid_dims} for Matryoshka embeddings")
@@ -34,27 +76,22 @@ class OllamaMatryoshkaEmbeddings(Embeddings):
         return self._embed(text)
 
     def _embed(self, text):
-        # First, try with dimensionality parameter
         response = requests.post(
             self.url, 
             json={
                 "model": self.model, 
                 "prompt": text,
-                "dimensionality": self.target_dim  # Try the parameter
+                "dimensionality": self.target_dim
             }
         )
         response.raise_for_status()
         embedding = response.json()["embedding"]
         
-        # If we got the requested dimension, return it
         if len(embedding) == self.target_dim:
             return embedding
         
-        # Otherwise, use Matryoshka truncation
-        # This is mathematically valid for nomic-embed-text v1.5
+        # Matryoshka truncation with normalization
         embedding_array = np.array(embedding[:self.target_dim])
-        
-        # Optional: Re-normalize after truncation (recommended for Matryoshka)
         norm = np.linalg.norm(embedding_array)
         if norm > 0:
             embedding_array = embedding_array / norm
@@ -64,63 +101,106 @@ class OllamaMatryoshkaEmbeddings(Embeddings):
 # Load environment variables
 load_dotenv()
 
-print("🚀 Starting embedding process with 512D Matryoshka embeddings...\n")
+print("🚀 Starting embedding process with metadata extraction...\n")
 
-# Load documents
+# Load documents with custom loader
 loader = DirectoryLoader(
     "fiu_content",
     glob="**/*.md",
-    loader_cls=TextLoader,
-    loader_kwargs={"encoding": "utf-8"},
+    loader_cls=MarkdownWithMetadataLoader,  # Use our custom loader
     recursive=True
 )
 docs = loader.load()
 print(f"📄 Loaded {len(docs)} documents")
 
-# Split documents
-splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
-chunks = splitter.split_documents(docs)
-print(f"✂️ Split into {len(chunks)} chunks")
+# Display sample metadata
+if docs:
+    print(f"\n📋 Sample document metadata:")
+    sample_metadata = docs[0].metadata
+    for key, value in sample_metadata.items():
+        print(f"  - {key}: {value}")
 
-# Create embeddings instance with 512D target
+# Split documents while preserving metadata
+print(f"\n✂️ Splitting documents...")
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=2000, 
+    chunk_overlap=200,
+    # Important: preserve metadata when splitting
+    length_function=len,
+)
+
+# Split documents and ensure metadata is preserved
+chunks = []
+for doc in docs:
+    doc_chunks = splitter.split_documents([doc])
+    # Ensure each chunk has the parent document's metadata
+    for chunk in doc_chunks:
+        chunk.metadata = doc.metadata.copy()
+        # Add chunk-specific metadata
+        chunk.metadata['chunk_index'] = doc_chunks.index(chunk)
+        chunk.metadata['total_chunks'] = len(doc_chunks)
+        chunks.append(chunk)
+
+print(f"✅ Split into {len(chunks)} chunks")
+
+# Display sample chunk metadata
+if chunks:
+    print(f"\n📋 Sample chunk metadata:")
+    sample_chunk_metadata = chunks[0].metadata
+    for key, value in sample_chunk_metadata.items():
+        print(f"  - {key}: {value}")
+
+# Create embeddings instance
 embeddings = OllamaMatryoshkaEmbeddings(target_dim=512)
 
-# Test the embedding dimension
+# Test embedding
 print("\n🧪 Testing embedding dimensions...")
-test_embedding = embeddings.embed_query("Test query for dimension check")
+test_embedding = embeddings.embed_query("Test query")
 print(f"✅ Embedding dimension: {len(test_embedding)}")
 
-# Create Qdrant collection
-print(f"\n📤 Uploading to Qdrant...")
+# Create Qdrant collection with metadata
+print(f"\n📤 Uploading to Qdrant with metadata...")
 try:
     vectorstore = Qdrant.from_documents(
         documents=chunks,
         embedding=embeddings,
         url=os.getenv("QDRANT_URL"),
         api_key=os.getenv("QDRANT_API_KEY"),
-        collection_name="fiu_content_v1_5_512d",  # Clear naming
+        collection_name="fiu_content_with_metadata",
         distance_func="Cosine",
         force_recreate=True,
-        batch_size=100,  # Reasonable batch size
-        content_payload_key="content",
+        batch_size=100,
+        content_payload_key="page_content",  # Changed to match LangChain default
         metadata_payload_key="metadata",
     )
-    print("✅ All chunks embedded and uploaded to Qdrant collection 'fiu_content_v1_5_512d'")
+    print("✅ All chunks embedded and uploaded with metadata!")
     
-    # Verify collection
-    from qdrant_client import QdrantClient
-    client = QdrantClient(
-        url=os.getenv("QDRANT_URL"),
-        api_key=os.getenv("QDRANT_API_KEY")
+    # Verify by doing a test query
+    print("\n🔍 Testing retrieval with metadata...")
+    test_results = vectorstore.similarity_search_with_score(
+        "student access success", 
+        k=3
     )
-    collection_info = client.get_collection("fiu_content_v1_5_512d")
-    print(f"\n📊 Collection info:")
-    print(f"  - Vectors count: {collection_info.vectors_count}")
-    print(f"  - Vector dimension: {collection_info.config.params.vectors.size}")
     
+    print(f"\n📊 Sample search results:")
+    for i, (doc, score) in enumerate(test_results):
+        print(f"\nResult {i+1} (score: {score:.4f}):")
+        print(f"  URL: {doc.metadata.get('url', 'N/A')}")
+        print(f"  Site: {doc.metadata.get('site', 'N/A')}")
+        print(f"  Title: {doc.metadata.get('title', 'N/A')}")
+        print(f"  Crawled: {doc.metadata.get('crawled_at', 'N/A')}")
+        print(f"  Content preview: {doc.page_content[:100]}...")
+        
 except Exception as e:
     print(f"❌ Error: {e}")
-    print("\nTroubleshooting:")
-    print("1. Check your .env file has correct QDRANT_URL and QDRANT_API_KEY")
-    print("2. Verify your Qdrant instance is running and accessible")
-    print("3. Try reducing batch_size if you're getting timeout errors")
+    import traceback
+    traceback.print_exc()
+
+print("\n✅ Done! Your Qdrant collection now includes all metadata from the markdown files.")
+print("\n💡 When querying, you can access metadata fields like:")
+print("  - doc.metadata['url'] - The original webpage URL")
+print("  - doc.metadata['site'] - The site name")
+print("  - doc.metadata['crawled_at'] - When it was crawled")
+print("  - doc.metadata['title'] - The page title")
+print("  - doc.metadata['filename'] - The markdown filename")
+print("  - doc.metadata['chunk_index'] - Which chunk of the document")

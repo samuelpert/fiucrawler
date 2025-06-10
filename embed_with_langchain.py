@@ -4,7 +4,6 @@ import yaml
 import requests
 from dotenv import load_dotenv
 import numpy as np
-from pathlib import Path
 
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -20,7 +19,7 @@ class MarkdownWithMetadataLoader(TextLoader):
         with open(self.file_path, encoding=self.encoding) as f:
             content = f.read()
             
-        # Extract YAML frontmatter
+        # Extract YAML frontmatter - FIXED REGEX
         metadata = {}
         yaml_match = re.match(r'^---\n(.*?)\n---\n(.*)$', content, re.DOTALL)
         
@@ -33,8 +32,12 @@ class MarkdownWithMetadataLoader(TextLoader):
                 # Get the content without frontmatter
                 text_content = yaml_match.group(2).strip()
             except yaml.YAMLError as e:
+                # If YAML parsing fails, try to extract metadata manually
                 print(f"Error parsing YAML in {self.file_path}: {e}")
-                text_content = content
+                
+                # Try manual extraction as fallback
+                metadata = self._extract_metadata_manually(yaml_content)
+                text_content = yaml_match.group(2).strip()
         else:
             text_content = content
         
@@ -52,6 +55,28 @@ class MarkdownWithMetadataLoader(TextLoader):
             page_content=text_content,
             metadata=metadata
         )
+    
+    def _extract_metadata_manually(self, yaml_content):
+        """Manually extract metadata when YAML parsing fails"""
+        metadata = {}
+        lines = yaml_content.strip().split('\n')
+        
+        for line in lines:
+            if ':' in line:
+                # Split only on the first colon to handle colons in values
+                key, value = line.split(':', 1)
+                key = key.strip()
+                value = value.strip()
+                
+                # Remove quotes if present
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                elif value.startswith("'") and value.endswith("'"):
+                    value = value[1:-1]
+                
+                metadata[key] = value
+        
+        return metadata
 
 class OllamaMatryoshkaEmbeddings(Embeddings):
     """
@@ -105,13 +130,17 @@ print("🚀 Starting embedding process with metadata extraction...\n")
 
 # Load documents with custom loader
 loader = DirectoryLoader(
-    "fiu_content",
+    "fiu_content2",
     glob="**/*.md",
     loader_cls=MarkdownWithMetadataLoader,  # Use our custom loader
     recursive=True
 )
 docs = loader.load()
 print(f"📄 Loaded {len(docs)} documents")
+
+# Count successful metadata extractions
+successful_metadata = sum(1 for doc in docs if doc.metadata.get('url') != 'Unknown URL')
+print(f"✅ Successfully parsed metadata for {successful_metadata}/{len(docs)} documents")
 
 # Display sample metadata
 if docs:
@@ -125,7 +154,6 @@ print(f"\n✂️ Splitting documents...")
 splitter = RecursiveCharacterTextSplitter(
     chunk_size=2000, 
     chunk_overlap=200,
-    # Important: preserve metadata when splitting
     length_function=len,
 )
 
@@ -166,7 +194,7 @@ try:
         embedding=embeddings,
         url=os.getenv("QDRANT_URL"),
         api_key=os.getenv("QDRANT_API_KEY"),
-        collection_name="fiu_content_with_metadata",
+        collection_name="fiu_content",
         distance_func="Cosine",
         force_recreate=True,
         batch_size=100,

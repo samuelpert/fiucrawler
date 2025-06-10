@@ -170,7 +170,7 @@ try:
         distance_func="Cosine",
         force_recreate=True,
         batch_size=100,
-        content_payload_key="page_content",  # Changed to match LangChain default
+        content_payload_key="content",  # Changed to match LangChain default
         metadata_payload_key="metadata",
     )
     print("✅ All chunks embedded and uploaded with metadata!")
